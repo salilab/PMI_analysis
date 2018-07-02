@@ -31,6 +31,13 @@ AT.get_restraint_fields()
 AT.read_stat_files()
 ```
 
+In this step we also automatically determine the quilibration time for each restraint and nuisance particle. Only models after equilibration are considered for further analysis.
+
+Reference for equilibration detection:
+Utilities for automatically detecting equilibrated region of molecular simulations. DOI: 10.1021/acs.jctc.5b00784
+John D. Chodera <john.chodera@choderalab.org>
+
+
 5. Obtain the statistics of the XLs restraint Psi nuisance parameter use:
 ```
 AT.get_Psi_stats()
