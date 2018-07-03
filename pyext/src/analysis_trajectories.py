@@ -26,6 +26,9 @@ import matplotlib.cm as cmx
 import matplotlib.colors as colors
 mpl.rcParams.update({'font.size': 8})
 
+import seaborn as sns
+import hdbscan
+
 class AnalysisTrajectories(object):
     def __init__(self,
                  out_dirs,
@@ -428,7 +431,8 @@ class AnalysisTrajectories(object):
                     d = eval(line)
                 except:
                     print("# Warning: skipped line number " + str(line_number) + " not a valid line")
-                    break
+                    break 
+
                 if line_number > 1:
                     frmf = [d[field] for field in query_rmf_file][0]
                     s0 = [float(d[field]) for field in self.all_fields]+[traj, frmf]
@@ -965,38 +969,34 @@ class AnalysisTrajectories(object):
     def do_hdbscan_clustering(self,
                               selected_scores,
                               min_cluster_size=150,
-                              min_samples=5):
+                              min_samples=5,
+                              skip=1):
 
         '''
         DO HDBSCAN clustering for selected restraint and/or nuisance parameters
         '''
-
-        try:
-            import seaborn as sns
-            import hdbscan
-        except:
-            raise KeyError('Missing hdbscan and/or seaborn library')
-        
+ 
         all_dfs = [self.S_all[dd] for dd in self.S_all.keys()]
         S_comb = pd.concat(all_dfs)
         
-        S_comb_sel = S_comb[selected_scores]
-        
+        S_comb_sel = S_comb[selected_scores].iloc[::skip]
+        S_comb_all = S_comb.iloc[::skip]       
+ 
         hdbsc = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size,
                                 min_samples=min_samples).fit(S_comb_sel)
         labels = hdbsc.labels_
 
         # Add clusters labels
         S_comb_sel = S_comb_sel.assign(cluster = pd.Series(hdbsc.labels_, index=S_comb_sel.index).values)
-        S_comb = S_comb.assign(cluster = pd.Series(hdbsc.labels_, index=S_comb.index).values)
+        S_comb_all = S_comb_all.assign(cluster = pd.Series(hdbsc.labels_, index=S_comb_all.index).values)
         
         print('Number of unique clusters: ', len(np.unique(hdbsc.labels_)))
         
         # Write and plot info from clustering
         self.plot_hdbscan_clustering(S_comb_sel, selected_scores)
-        self.do_write_hdbscan_clustering(S_comb)
+        self.do_write_hdbscan_clustering(S_comb_all)
 
-        S_comb_sel = S_comb_sel.assign(half = pd.Series(S_comb['half'],index=S_comb.index).values)
+        S_comb_sel = S_comb_sel.assign(half = pd.Series(S_comb_all['half'],index=S_comb_sel.index).values)
         self.do_write_hdbscan_clustering_info(S_comb_sel)
 
     def do_write_hdbscan_clustering_info(self, S_comb_sel):
@@ -1304,4 +1304,6 @@ class AnalysisTrajectories(object):
             return max(intersect, key = len)
         else:
             return strs[0]
+
+
         
