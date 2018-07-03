@@ -91,8 +91,17 @@ AT.do_hdbscan_clustering(['EV_sum', 'XLs_sum'],
 			
 ```
 
+Reference for HDBSCAN clustering:
+
+http://hdbscan.readthedocs.io/en/latest/index.html
+
 9. To extract the models from the rmf3 file, use the script `run_extract_models.py`. 
 
 10. To test for convergence and do structural clustering, use the script `run_clustering.sh`
+
+Reference for convegence and clustering anlysis:
+
+Assessing exhaustiveness of stochastic sampling for integrative modeling of macromolecular structures. https://doi.org/10.1016/j.bpj.2017.10.005
+
 
 11. If you know the structure of complex (i.e. you are benckmarking a method), you can determine the accuracy of the structural models using `get_accuracy_rmfs.py`
