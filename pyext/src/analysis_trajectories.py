@@ -43,7 +43,7 @@ class AnalysisTrajectories(object):
         self.restraint_names = {}
         self.all_fields = []
 
-        self.th = 120
+        self.th = 500
         
         # For multiprocessing
         self.manager = mp.Manager()
@@ -178,6 +178,9 @@ class AnalysisTrajectories(object):
         self.restraint_names[2] = 'Total_score'
         name_i = 3
 
+        # Percent satisfaction fields
+        self.percent_satisfied = []
+        
         # All possible restraints
         if self.Excluded_volume_restraint:
             EV = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('ExcludedVolumeSphere_' in self.stat2_dict[k])}
@@ -294,6 +297,9 @@ class AnalysisTrajectories(object):
                     self.restraint_names[name_i] = 'Occams_'+k.split('OccamsRestraint_')[-1]
                     name_i += 1
             self.all_fields += Occ.values()
+
+            # Percent of restraints satisfied
+            self.Occams_satif = self.get_field_id(self.stat2_dict, 'OccamsRestraint_satisfied_0')
             
         if self.pEMAP_restraint:
             pEMAP = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('SimplifiedPEMAP_Score_' in self.stat2_dict[k] and ':' not in self.stat2_dict[k])}
@@ -523,16 +529,16 @@ class AnalysisTrajectories(object):
             traj = [x for x in out.split('/') if self.dir_name in x][0]
             traj_number = int(traj.split(self.dir_name)[1])
             stat_files = np.sort(glob.glob(out+'stat.*.out'))
-            if self.XLs_restraint:
-                S_tot_scores, S_dist, P_satif = self.read_stats_detailed(traj,
-                                                                         stat_files,
-                                                                         self.all_fields,
-                                                                         self.XLs_info.values(),
-                                                                         None,
-                                                                         self.rmf_file_field)
+            #if self.XLs_restraint:
+            #    S_tot_scores, S_dist, P_satif = self.read_stats_detailed(traj,
+            #                                                             stat_files,
+            #                                                             self.all_fields,
+            #                                                             self.XLs_info.values(),
+            #                                                             None,
+            #                                                             self.rmf_file_field)
                 
                 
-            elif self.atomic_XLs_restraint:
+            if self.atomic_XLs_restraint and not self.pEMAP_restraint and not self.Occams_restraint:
                 S_tot_scores, S_dist, P_satif = self.read_stats_detailed(traj,
                                                                          stat_files,
                                                                          self.all_fields,
@@ -555,6 +561,23 @@ class AnalysisTrajectories(object):
                                                                          self.XLs_info.values(),
                                                                          self.pEMAP_satif,
                                                                          self.rmf_file_field)
+            elif self.Occams_restraint  and not self.XLs_restraint:
+                S_tot_scores, S_dist, P_satif = self.read_stats_detailed(traj,
+                                                                         stat_files,
+                                                                         self.all_fields,
+                                                                         None,
+                                                                         self.Occams_satif,
+                                                                         self.rmf_file_field)
+    
+            elif self.Occams_restraint and self.XLs_restraint:
+                S_tot_scores, S_dist, P_satif = self.read_stats_detailed(traj,
+                                                                         stat_files,
+                                                                         self.all_fields,
+                                                                         self.XLs_info.values(),
+                                                                         self.Occams_satif,
+                                                                         self.rmf_file_field)
+
+            
                 
             else:
                 S_tot_scores, S_dist, P_satif = self.read_stats_detailed(traj,
@@ -596,12 +619,12 @@ class AnalysisTrajectories(object):
             ts_eq = []
             for r in sel_entries:
                 try:
-                    [t, g, N] = detectEquilibration(np.array(S_tot_scores[r].loc[self.th:]), nskip=20, method='multiscale')
+                    [t, g, N] = detectEquilibration(np.array(S_tot_scores[r].loc[self.th:]), nskip=5, method='multiscale')
                     ts_eq.append(t)
                 except:
                     ts_eq.append(0)
             print('ts_eq', ts_eq)
-            t_max = np.max(ts_eq)
+            ts_max = np.max(ts_eq)+self.th
         
             # Plot the scores and restraint satisfaction
             file_out = 'plot_scores_%s.pdf'%(traj_number)               
@@ -610,6 +633,10 @@ class AnalysisTrajectories(object):
             if self.pEMAP_restraint:
                 file_out_pemap = 'plot_pEMAP_%s.pdf'%(traj_number) 
                 self.plot_pEMAP_distances(P_satif, file_out_pemap)
+
+            if self.Occams_restraint:
+                file_out_occams = 'plot_Occams_satisfaction_%s.pdf'%(traj_number) 
+                self.plot_Occams_satisfaction(P_satif, file_out_occams)
                 
             # Check how many XLs are satisfied
             if self.XLs_restraint:
@@ -618,7 +645,7 @@ class AnalysisTrajectories(object):
                                                                self.XLs_cutoffs,
                                                                atomic_XLs = False,
                                                                traj_number = traj_number,
-                                                               t_max = t_max )
+                                                               ts_max = ts_max )
             
             if self.atomic_XLs_restraint:
                 S_tot_scores, S_dist = self.analyze_XLs_values(S_tot_scores,
@@ -626,10 +653,9 @@ class AnalysisTrajectories(object):
                                                                self.atomic_XLs_cutoffs,
                                                                atomic_XLs = True,
                                                                traj_number = traj_number,
-                                                               t_max = t_max )
+                                                               ts_max = ts_max )
                                                                                                  
             # Add scores to dictionary XLs_satif
-            ts_max = np.max(ts_eq)
             
             # Add half info
             if out in self.dir_halfA:
@@ -683,7 +709,7 @@ class AnalysisTrajectories(object):
         For each trajectory plot all restraint scores
         '''
         n_bins=20
-        t_max = np.max(ts_eq)
+        ts_max = np.max(ts_eq)
         n_res = len(selected_scores.columns.values)-1
     
         fig, ax = pl.subplots(figsize=(2.0*n_res, 4.0), nrows=2, ncols=n_res)
@@ -698,7 +724,7 @@ class AnalysisTrajectories(object):
         
         for i, c in enumerate(selected_scores.columns.values[1:]):
             axes[i+n_res].hist(selected_scores[c].loc[ts_eq[i]::10], n_bins, histtype='step',fill=False, color='orangered',alpha=0.9)
-            axes[i+n_res].hist(selected_scores[c].loc[t_max::10], n_bins, histtype='step',fill=False, color='gold',alpha=0.9)
+            axes[i+n_res].hist(selected_scores[c].loc[ts_max::10], n_bins, histtype='step',fill=False, color='gold',alpha=0.9)
             axes[i+n_res].set_xlabel('Score (a.u.)',fontsize=12)
             if i == 0:
                 axes[i+n_res].set_ylabel('Density',fontsize=12)
@@ -706,7 +732,7 @@ class AnalysisTrajectories(object):
         pl.tight_layout(pad=0.5, w_pad=0.1, h_pad=2.0)
         fig.savefig(self.analysis_dir+file_out) 
 
-    def analyze_XLs_values(self, S_tot_scores, S_dist, XLs_cutoffs, atomic_XLs, traj_number, t_max):
+    def analyze_XLs_values(self, S_tot_scores, S_dist, XLs_cutoffs, atomic_XLs, traj_number, ts_max):
 
         sel_nuis = [v for v in S_dist.columns.values if 'Psi' in v]
                 
@@ -733,7 +759,7 @@ class AnalysisTrajectories(object):
             XLs_satif_fields.append('XLs_satif')
             
         file_out_xls = 'plot_XLs_%s.pdf'%(traj_number)
-        self.plot_XLs_satisfaction(S_tot_scores['MC_frame'].values, S_tot_scores[XLs_satif_fields], S_dist[sel_nuis], t_max, file_out_xls)
+        self.plot_XLs_satisfaction(S_tot_scores['MC_frame'].values, S_tot_scores[XLs_satif_fields], S_dist[sel_nuis], ts_max, file_out_xls)
         
         # Add percent of satisfied XLs to DF
         if self.XLs_restraint_nuisances:
@@ -742,13 +768,13 @@ class AnalysisTrajectories(object):
             nuis_fields = sorted([n for n in S_dist.columns.values if 'Psi' in n])
             for nuis in sorted(nuis_fields):
                 # Create df instead of dic
-                nuis_mean.append(np.mean(S_dist[nuis].loc[t_max:]))
-                nuis_std.append(np.std(S_dist[nuis].loc[t_max:]))
+                nuis_mean.append(np.mean(S_dist[nuis].loc[ts_max:]))
+                nuis_std.append(np.std(S_dist[nuis].loc[ts_max:]))
             self.XLs_nuis[traj_number] = list(nuis_mean) + list(nuis_std)
 
         return S_tot_scores, S_dist
     
-    def plot_XLs_satisfaction(self, t, perc_per_step, nuis_vals, t_max, file_out):
+    def plot_XLs_satisfaction(self, t, perc_per_step, nuis_vals, ts_max, file_out):
         c = ['gold', 'orange', 'red', 'blue', 'green']
         n_bins = 20
         
@@ -774,7 +800,7 @@ class AnalysisTrajectories(object):
 
         for i,c in enumerate(nuis_vals.columns.values):
             label = c.split('CrossLinkingMassSpectrometryRestraint_')[-1]
-            axes[2].hist(nuis_vals[c].loc[t_max:],n_bins, histtype='step',fill=False, label=label)
+            axes[2].hist(nuis_vals[c].loc[ts_max:],n_bins, histtype='step',fill=False, label=label)
             
         axes[2].set_title('Psi nuisance parameters', fontsize=14)
         axes[2].set_xlabel('Psi',fontsize=12)
@@ -1035,7 +1061,7 @@ class AnalysisTrajectories(object):
             # Select two-halves
             HA = HH_cluster[(HH_cluster['half']=='A')]
             HB = HH_cluster[(HH_cluster['half']=='B')]
-            if len(HA['half'].values) > 10 and len(HB['half'].values) > 10:
+            if len(HA['half'].values) >= 10 and len(HB['half'].values) >= 10:
                 clus_sel += 1
                 n = self.plot_scores_distributions(HA, HB, cl)
             
@@ -1192,15 +1218,15 @@ class AnalysisTrajectories(object):
 
         # Plot expected score from random set
         nn = len(scores_A) + len(scores_B)
-        
-        M = np.arange(int(min(len(scores_A),len(scores_B))/50.), min(len(scores_A),len(scores_B)),int(nn/50.))
+       
+        M = np.arange(int(min(len(scores_A),len(scores_B))/20.), min(len(scores_A),len(scores_B)),int(nn/20.))
         if len(M)<=10.0:
             print(len(scores_A), len(scores_B))
             M = np.arange(int(min(len(scores_A),len(scores_B))/10.), min(len(scores_A),len(scores_B)),int(min(len(scores_A),len(scores_B))/10.))
     
         RH1 = []
         RH2 = []
-        for m in M:
+        for m in M[1:]:
             D1 = []
             D2 = []
             for d in range(20):
@@ -1293,6 +1319,19 @@ class AnalysisTrajectories(object):
         pl.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
         fig.savefig(self.analysis_dir+file_out)
 
+    def plot_Occams_satisfaction(self, Occams_satif, file_out):
+        n_bins = 20
+        fig, ax = pl.subplots(figsize=(4.0, 4.0), nrows=1, ncols=1)
+        
+        
+        ax.plot(Occams_satif[::10,0], Occams_satif[::10,1], color='orangered',alpha=0.8)
+        ax.set_title('Occams restraint', fontsize=14)
+        ax.set_xlabel('Step',fontsize=12)
+        ax.set_ylabel('Percent satisfied',fontsize=12)
+        
+        pl.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
+        fig.savefig(self.analysis_dir+file_out)
+        
     def substrings(self, s):
         for i in range(len(s)):
             for j in range(i, len(s)):

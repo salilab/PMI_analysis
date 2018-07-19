@@ -5,7 +5,7 @@ import glob
 import sys
 import os
 
-sys.path.append('/home/ignacia/SOFTW/PMI_analysis/pyext/src/')xs
+sys.path.append('/home/ignacia/SOFTW/PMI_analysis/pyext/src/')
 from analysis_trajectories import *
 
 #################################
