@@ -145,10 +145,8 @@ class AccuracyModels(object):
         fig, ax = pl.subplots(figsize=(5.0, 5.0), nrows=1, ncols=1)
         palette = pl.get_cmap('Set1')
         colors = [palette(1.*i/len(clus_all)) for i in range(len(clus_all))]
-        print('--------',self.all_accu.keys())
         for i, clus in enumerate(clus_all):
             if len(np.array(self.all_accu[clus]))> 0:
-                print('123', clus, np.array(self.all_accu[clus]))
                 A = np.array(self.all_accu[clus])[:,1].astype(float)
                 ax.hist(A, n_bins,  histtype='step',fill=False, color=colors[i],alpha=0.9)
                 ax.axvline(np.mean(A), color=colors[i], alpha=0.9)
