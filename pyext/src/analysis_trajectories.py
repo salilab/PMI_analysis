@@ -43,7 +43,7 @@ class AnalysisTrajectories(object):
         self.restraint_names = {}
         self.all_fields = []
 
-        self.th = 500
+        self.th = 50
         
         # For multiprocessing
         self.manager = mp.Manager()
@@ -75,6 +75,8 @@ class AnalysisTrajectories(object):
         self.Occams_positional_nuisances = False
         self.pEMAP_restraint = False
         self.DOPE_restraint = False
+        self.MembraneExclusion_restraint = False
+        self.MembraneSurfaceLocation_restraint = False
 
         # By default, add restraints of same type
         self.sum_Connectivity_restraint = True
@@ -82,8 +84,11 @@ class AnalysisTrajectories(object):
         self.sum_Binding_restraint = True
         self.sum_Distance_restraint =  True
         self.sum_XLs_restraint = True
+        self.sum_Occams_positional_restraint = True
         self.sum_atomic_XLs_restraint = True
         self.sum_DOPE_restraint = True
+        self.sum_MembraneExclusion_restraint = True
+        self.sum_MembraneSurfaceLocation_restraint = True
         
         self.select_XLs_satisfaction =  False
         self.select_EM_score = False
@@ -148,6 +153,12 @@ class AnalysisTrajectories(object):
     def set_analyze_DOPE_restraint(self):
         self.DOPE_restraint = True
 
+    def set_analyze_MembraneExclusion_restraint(self):
+        self.MembraneExclusion_restraint = True
+
+    def set_analyze_MembraneSurfaceLocation_restraint(self):
+        self.MembraneSurfaceLocation_restraint = True
+
     def set_select_by_XLs_satisfation(self):
         self.select_EM_score = True
         
@@ -158,7 +169,7 @@ class AnalysisTrajectories(object):
     def set_select_by_EM_score(self, score_cutoff):
         self.select_EM_score = True
         self.cutoff_EM_score = score_cutoff
-    
+        
     def get_restraint_fields(self):
         '''
         Gather information to retrieve from
@@ -288,7 +299,7 @@ class AnalysisTrajectories(object):
             self.all_fields += EM3D.values()
 
         if self.Occams_restraint:
-            Occ = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('OccamsRestraint_0' in self.stat2_dict[k] and 'sigma' not in self.stat2_dict[k])}
+            Occ = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('OccamsRestraint_Score' in self.stat2_dict[k])}
             if len(Occ) == 1:
                 self.restraint_names[name_i] = 'Occams_sum'
                 name_i += 1
@@ -299,8 +310,19 @@ class AnalysisTrajectories(object):
             self.all_fields += Occ.values()
 
             # Percent of restraints satisfied
-            self.Occams_satif = self.get_field_id(self.stat2_dict, 'OccamsRestraint_satisfied_0')
-            
+            self.Occams_satif = self.get_field_id(self.stat2_dict, 'OccamsRestraint_satisfied')
+
+        if self.Occams_restraint:
+            OccPos = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('OccamsPositionalRestraint_Score' in self.stat2_dict[k])}
+            if len(OccPos) == 1:
+                self.restraint_names[name_i] = 'OccamsPos_sum'
+                name_i += 1
+            else:
+                for k, v in OccPos.items():
+                    self.restraint_names[name_i] = 'OccamsPos_'+k.split('OccamsPositionalRestraint_Score')[-1]
+                    name_i += 1
+            self.all_fields += OccPos.values()
+ 
         if self.pEMAP_restraint:
             pEMAP = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('SimplifiedPEMAP_Score_' in self.stat2_dict[k] and ':' not in self.stat2_dict[k])}
             if len(pEMAP) == 1:
@@ -356,6 +378,28 @@ class AnalysisTrajectories(object):
                     self.restraint_names[name_i] = 'DOPE_'+k.split('DOPERestraint_score_')[-1]
                     name_i += 1
             self.all_fields += DOPE.values()
+
+        if self.MembraneExclusion_restraint:
+            MEX = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('MembraneExclusionRestraint' in self.stat2_dict[k])}
+            if len(MEX) == 1:
+                self.restraint_names[name_i] = 'MEX_sum'
+                name_i += 1
+            else:
+                for k, v in MEX.items():
+                    self.restraint_names[name_i] = 'MEX_'+k.split('MembraneExclusionRestraint_')[-1]
+                    name_i += 1
+            self.all_fields += MEX.values()
+
+        if self.MembraneSurfaceLocation_restraint:
+            MSL = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('MembraneSurfaceLocation' in self.stat2_dict[k])}
+            if len(MSL) == 1:
+                self.restraint_names[name_i] = 'MSL_sum'
+                name_i += 1
+            else:
+                for k, v in MSL.items():
+                    self.restraint_names[name_i] = 'MSL_'+k.split('MembraneSurfaceLocation_')[-1]
+                    name_i += 1
+            self.all_fields += MSL.values()
 
     def read_DB(self, db_file):
         ''' Read database '''
@@ -456,6 +500,8 @@ class AnalysisTrajectories(object):
         # Convert into pandas DF
         column_names = [self.restraint_names[x] for x in sorted(self.restraint_names.keys())] + ['traj', 'rmf3_file']
         DF = pd.DataFrame(S_scores, columns = column_names)
+
+        DF.to_csv('analys/scores_traj.csv')
         
         # If some restraints need to be added
         if self.XLs_restraint and self.sum_XLs_restraint:
@@ -481,7 +527,15 @@ class AnalysisTrajectories(object):
         if self.Distance_restraint and self.sum_Distance_restraint:
             DR_sum = pd.Series(self.add_restraint_type(DF, 'DR_'))
             DF = DF.assign(DR_sum=DR_sum.values)
-            
+
+        if self.MembraneExclusion_restraint and self.sum_MembraneExclusion_restraint:
+            MEX_sum = pd.Series(self.add_restraint_type(DF, 'MEX_'))
+            DF = DF.assign(MEX_sum=MEX_sum.values)
+
+        if self.MembraneExclusion_restraint and self.sum_MembraneExclusion_restraint:
+            MSL_sum = pd.Series(self.add_restraint_type(DF, 'MSL_'))
+            DF = DF.assign(MSL_sum=MSL_sum.values)
+    
         # Get distance fields
         if self.XLs_restraint:
             S_dist = np.array(S_dist)
@@ -526,8 +580,12 @@ class AnalysisTrajectories(object):
             out_dirs_sel = [out_dirs_sel]
         
         for out in out_dirs_sel:
-            traj = [x for x in out.split('/') if self.dir_name in x][0]
-            traj_number = int(traj.split(self.dir_name)[1])
+            if self.dir_name in out:
+                traj = [x for x in out.split('/') if self.dir_name in x][0]
+                traj_number = int(traj.split(self.dir_name)[1])
+            else:
+                traj = 0
+                traj_number = 0
             stat_files = np.sort(glob.glob(out+'stat.*.out'))
             #if self.XLs_restraint:
             #    S_tot_scores, S_dist, P_satif = self.read_stats_detailed(traj,
@@ -586,6 +644,7 @@ class AnalysisTrajectories(object):
                                                                          None,
                                                                          None,
                                                                          self.rmf_file_field)
+                print(S_tot_scores.head())
 
 
             print('The mean score, min score, and n frames are: ', traj_number,
