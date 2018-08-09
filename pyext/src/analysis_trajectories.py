@@ -286,7 +286,8 @@ class AnalysisTrajectories(object):
             
         if self.MembraneSurfaceLocation_restraint:
             self.get_fields('MembraneSurfaceLocation', 'MSL')
-            
+
+        
     def get_fields(self, name_stat_file, short_name):
         '''
         For each restraint, get the stat file field number
@@ -1074,21 +1075,47 @@ class AnalysisTrajectories(object):
 
         palette = sns.color_palette("deep", len(np.unique(S_comb_sel['cluster']))).as_hex()
         cluster_colors = [palette[col] for col in S_comb_sel['cluster']]
-    
-        nn = len(selected_scores)-1
-        fig, ax = pl.subplots(figsize=(5.0*nn, 5.0), nrows=1, ncols=nn)
-        if nn == 1:
-            ax = [ax]
-        for i in range(len(selected_scores)-1):
-            score_0 = selected_scores[i]
-            score_1 = selected_scores[i+1]
-            ax[i].scatter(S_comb_sel[score_0],S_comb_sel[score_1], c=np.array(cluster_colors),s=3.0,alpha=0.3)
-            ax[i].set_title('HDBSCAN clustering')
-            ax[i].set_xlabel(score_0 +' (a.u.)')
-            ax[i].set_ylabel(score_1 +' (a.u.)')
+
+        n_sel = len(selected_scores)
+        gs = gridspec.GridSpec(n_sel, n_sel)
+
+        i = 0
+        for s1, s2 in itertools.product(selected_scores, 2):
+            if s1 == s2:
+                ax[i].hist(S_comb_sel[s1], )
+            else:
+                ax[i].scatter(S_comb_sel[s1],S_comb_sel[s2], c=np.array(cluster_colors),s=3.0,alpha=0.3)
+                #ax[i].set_xlabel(s1 +' (a.u.)')
+                #ax[i].set_ylabel(s2 +' (a.u.)')
+                
+        # Add horizontal labels (top plots)
+        for i in range(n_sel):
+            fig.get_axes()[i].set_title('%s'%(selected_scores[i]),
+                                        fontsize=12)
+        # Add vertical labels
+        fig.get_axes()[0].set_ylabel('%s'%(nres.keys()[0]),
+                                     fontsize=12)
+        k = 1 
+        for i in range(n_sel,n_sel*n_sel,n_sel):
+            fig.get_axes()[i].set_ylabel('%s'%(selected_scores[k]),
+                                         fontsize=12)
+            k += 1
+        
+        
+        #nn = len(selected_scores)-1
+        #fig, ax = pl.subplots(figsize=(5.0*nn, 5.0), nrows=1, ncols=nn)
+        #if nn == 1:
+        #    ax = [ax]
+        #for i in range(len(selected_scores)-1):
+        #    score_0 = selected_scores[i]
+        #    score_1 = selected_scores[i+1]
+        #    ax[i].scatter(S_comb_sel[score_0],S_comb_sel[score_1], c=np.array(cluster_colors),s=3.0,alpha=0.3)
+        #    ax[i].set_title('HDBSCAN clustering')
+        #    ax[i].set_xlabel(score_0 +' (a.u.)')
+        #    ax[i].set_ylabel(score_1 +' (a.u.)')
+            
             
         pl.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
-
         fig.savefig(self.analysis_dir+'plot_clustering_scores.png') 
         pl.close()
         
@@ -1144,7 +1171,6 @@ class AnalysisTrajectories(object):
             
             # Collect scores
             self.scores.append(row.Total_score)
-        out_scores.close()
             
     def create_gsms_dir(self, dir):
         '''
