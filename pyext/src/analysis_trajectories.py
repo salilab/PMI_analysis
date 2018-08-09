@@ -187,55 +187,21 @@ class AnalysisTrajectories(object):
         self.restraint_names[0] = 'MC_frame'
         self.restraint_names[1] = 'rmf_frame_index'
         self.restraint_names[2] = 'Total_score'
-        name_i = 3
+        self.name_i = 3
 
         # Percent satisfaction fields
         self.percent_satisfied = []
         
         # All possible restraints
         if self.Excluded_volume_restraint:
-            EV = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('ExcludedVolumeSphere_' in self.stat2_dict[k])}
-            if len(EV) == 1:
-                self.restraint_names[name_i] = 'EV_sum'
-                name_i += 1
-            else:
-                for k, v in EV.items():
-                    self.restraint_names[name_i] = 'EV_'+k.split('ExcludedVolumeSphere_')[-1]
-                    name_i += 1
-            self.all_fields += EV.values()
-
+            self.get_fields('ExcludedVolumeSphere', 'EV')
+           
         if self.Connectivity_restraint:
-            CR = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('ConnectivityRestraint_' in self.stat2_dict[k])}
-            if len(CR) == 1:
-                self.restraint_names[name_i] = 'CR_sum'
-                name_i += 1
-            else:
-                for k, v in CR.items():
-                    self.restraint_names[name_i] = 'CR_'+k.split('ConnectivityRestraint_')[-1]
-                    name_i += 1
-            self.all_fields += CR.values()  
+            self.get_fields('ConnectivityRestraint', 'CR')
 
         if self.XLs_restraint:
-            XLs = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('CrossLinkingMassSpectrometryRestraint_Data_Score' in self.stat2_dict[k])}
-            if len(XLs) == 1:
-                self.restraint_names[name_i] = 'XLs_sum'
-                name_i += 1
-            else:
-                for k, v in XLs.items():
-                    self.restraint_names[name_i] = 'XLs_'+k.split('CrossLinkingMassSpectrometryRestraint_')[-1]
-                    name_i += 1
-            self.all_fields += XLs.values()
-
-            # Get Psi score
-            Psis = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('CrossLinkingMassSpectrometryRestraint_PriorPsi_Score' in self.stat2_dict[k])}
-            if len(Psis) == 1:
-                self.restraint_names[name_i] = 'Psi_scores_Sum'
-                name_i += 1
-            else:
-                for k, v in Psis.items():
-                    self.restraint_names[name_i] = 'Psi_scores_'+k.split('CrossLinkingMassSpectrometryRestraint_PriorPsi_Score_')[-1]
-                    name_i += 1
-            self.all_fields += Psis.values()
+            self.get_fields('CrossLinkingMassSpectrometryRestraint_Data_Score', 'XLs')
+            self.get_fields('CrossLinkingMassSpectrometryRestraint_PriorPsi_Score', 'XLs_psi')
             
             # Other quantities associated to XLs (distances and nuisances)
             XLs_dist = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('CrossLinkingMassSpectrometryRestraint_Distance_' in self.stat2_dict[k])}
@@ -244,8 +210,8 @@ class AnalysisTrajectories(object):
                 XLs_nuis = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('CrossLinkingMassSpectrometryRestraint_Psi_' in self.stat2_dict[k] and 'MonteCarlo_' not in self.stat2_dict[k])}
                 self.psi_head = self.get_str_match(list(XLs_nuis.keys()))
                 for k, v in XLs_nuis.items():
-                    self.restraint_names[name_i] = 'Psi_vals_'+k.split('CrossLinkingMassSpectrometryRestraint_Psi_')[-1]
-                    name_i += 1
+                    self.restraint_names[self.name_i] = 'Psi_vals_'+k.split('CrossLinkingMassSpectrometryRestraint_Psi_')[-1]
+                    self.name_i += 1
                 self.all_fields += XLs_nuis.values()
 
                 if len(XLs_nuis.keys())> 1:
@@ -258,20 +224,12 @@ class AnalysisTrajectories(object):
 
         # Atomic XLs restraint
         if self.atomic_XLs_restraint:
-            atomic_XLs = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('AtomicXLRestraint_Score' in self.stat2_dict[k])}
-            if len(atomic_XLs) == 1:
-                self.restraint_names[name_i] = 'atomic_XLs_sum'
-                name_i += 1
-            else:
-                for k, v in XLs.items():
-                    self.restraint_names[name_i] = 'atomic_XLs_'+k.split('AtomicXLRestraint_Score_')[-1]
-                    name_i += 1
-            self.all_fields += atomic_XLs.values()
-
+            self.get_fields('AtomicXLRestraint_Score', 'atomic_XLs')
+            
             # Get Psi score
             Psi_score = self.get_field_id(self.stat2_dict,'AtomicXLRestraint_psi_Score')
             self.restraint_names[name_i] = 'atomic_Psi_score'
-            name_i += 1
+            self.name_i += 1
             self.all_fields += Psi_score
             
             # Other quantities associated to XLs (distances and nuisances)
@@ -288,51 +246,19 @@ class AnalysisTrajectories(object):
             self.xls_fields = self.atomic_XLs_info.values()
             
         if self.EM_restraint:
-            EM3D = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('GaussianEMRestraint_' in self.stat2_dict[k] and 'sigma' not in self.stat2_dict[k])}
-            if len(EM3D) == 1:
-                self.restraint_names[name_i] = 'EM3D_sum'
-                name_i += 1
-            else:
-                for k, v in EM3D.items():
-                    self.restraint_names[name_i] = 'EM3D_'+k.split('GaussianEMRestraint_')[-1]
-                    name_i += 1
-            self.all_fields += EM3D.values()
-
+            self.get_fields('GaussianEMRestraint', 'EM3D')
+            
         if self.Occams_restraint:
-            Occ = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('OccamsRestraint_Score' in self.stat2_dict[k])}
-            if len(Occ) == 1:
-                self.restraint_names[name_i] = 'Occams_sum'
-                name_i += 1
-            else:
-                for k, v in Occ.items():
-                    self.restraint_names[name_i] = 'Occams_'+k.split('OccamsRestraint_')[-1]
-                    name_i += 1
-            self.all_fields += Occ.values()
-
+            self.get_fields('OccamsRestraint_Score', 'OccCon')
+            
             # Percent of restraints satisfied
             self.Occams_satif = self.get_field_id(self.stat2_dict, 'OccamsRestraint_satisfied')
 
         if self.Occams_restraint:
-            OccPos = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('OccamsPositionalRestraint_Score' in self.stat2_dict[k])}
-            if len(OccPos) == 1:
-                self.restraint_names[name_i] = 'OccamsPos_sum'
-                name_i += 1
-            else:
-                for k, v in OccPos.items():
-                    self.restraint_names[name_i] = 'OccamsPos_'+k.split('OccamsPositionalRestraint_Score')[-1]
-                    name_i += 1
-            self.all_fields += OccPos.values()
- 
+            self.get_fields('OccamsPositionalRestraint_Score', 'OccPos')
+            
         if self.pEMAP_restraint:
-            pEMAP = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('SimplifiedPEMAP_Score_' in self.stat2_dict[k] and ':' not in self.stat2_dict[k])}
-            if len(pEMAP) == 1:
-                self.restraint_names[name_i] = 'pEMAP_sum'
-                name_i += 1
-            else:
-               for k, v in pEMAP.items():
-                self.restraint_names[name_i] = 'pEMap_'+k.split('_')[-1]
-                name_i += 1
-            self.all_fields += pEMAP.values()
+            self.get_fields('SimplifiedPEMAP_Score', 'pEMAP')
             
             # Percent of restraints satisfied
             self.pEMAP_satif = self.get_field_id(self.stat2_dict, 'SimplifiedPEMAP_Satisfied')
@@ -347,60 +273,35 @@ class AnalysisTrajectories(object):
                 v_pEMAP.append(val)
 
         if self.Distance_restraint:
-            DR = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('DistanceRestraint_Score_' in self.stat2_dict[k])}
-            if len(DR) == 1:
-                self.restraint_names[name_i] = 'DR_sum'
-                name_i += 1
-            else:
-                for k, v in DR.items():
-                    self.restraint_names[name_i] = 'DR_'+k.split('DistanceRestraint_Score_')[-1]
-                    name_i += 1
-            self.all_fields += DR.values()
-
+            self.get_fields('DistanceRestraint_Score', 'DR')
+            
         if self.Binding_restraint:
-            BR = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('ResidueBindingRestraint_score_' in self.stat2_dict[k])}
-            if len(BR) == 1:
-                self.restraint_names[name_i] = 'BR_sum'
-                name_i += 1
-            else:
-                for k, v in BR.items():
-                    self.restraint_names[name_i] = 'BR_'+k.split('ResidueBindingRestraint_score_')[-1]
-                    name_i += 1
-            self.all_fields += BR.values()
-
+            self.get_fields('ResidueBindingRestraint_score', 'BR')
+            
         if self.DOPE_restraint:
-            DOPE = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('DOPE_Restraint_score' in self.stat2_dict[k])}
-            if len(DOPE) == 1:
-                self.restraint_names[name_i] = 'DOPE_sum'
-                name_i += 1
-            else:
-                for k, v in DOPE.items():
-                    self.restraint_names[name_i] = 'DOPE_'+k.split('DOPERestraint_score_')[-1]
-                    name_i += 1
-            self.all_fields += DOPE.values()
-
+            self.get_fields('DOPE_Restraint_score', 'DOPE')
+            
         if self.MembraneExclusion_restraint:
-            MEX = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('MembraneExclusionRestraint' in self.stat2_dict[k])}
-            if len(MEX) == 1:
-                self.restraint_names[name_i] = 'MEX_sum'
-                name_i += 1
-            else:
-                for k, v in MEX.items():
-                    self.restraint_names[name_i] = 'MEX_'+k.split('MembraneExclusionRestraint_')[-1]
-                    name_i += 1
-            self.all_fields += MEX.values()
-
+            self.get_fields('MembraneExclusionRestraint', 'MEX')
+            
         if self.MembraneSurfaceLocation_restraint:
-            MSL = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('MembraneSurfaceLocation' in self.stat2_dict[k])}
-            if len(MSL) == 1:
-                self.restraint_names[name_i] = 'MSL_sum'
-                name_i += 1
-            else:
-                for k, v in MSL.items():
-                    self.restraint_names[name_i] = 'MSL_'+k.split('MembraneSurfaceLocation_')[-1]
-                    name_i += 1
-            self.all_fields += MSL.values()
-
+            self.get_fields('MembraneSurfaceLocation', 'MSL')
+            
+    def get_fields(self, name_stat_file, short_name):
+        '''
+        For each restraint, get the stat file field number
+        '''
+        RES = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if (name_stat_file in self.stat2_dict[k])}
+        if len(RES) == 1:
+            self.restraint_names[self.name_i] = short_name+'_sum'
+            self.name_i += 1
+        else:
+            for k, v in RES.items():
+                self.restraint_names[self.name_i] = short_name+'_'+k.split(name_stat_file + '_')[-1]
+                self.name_i += 1
+        self.all_fields += RES.values()
+        
+            
     def read_DB(self, db_file):
         ''' Read database '''
         DB = {}
@@ -1193,6 +1094,8 @@ class AnalysisTrajectories(object):
         
     def do_extract_models(self, gsms_info, filename, gsms_dir):
 
+        self.scores = self.manager.list()
+        
         # Split the DF
         df_array = np.array_split(gsms_info, self.nproc)
 
@@ -1208,7 +1111,10 @@ class AnalysisTrajectories(object):
             
         # Exit the completed processes
         for p in processes:
-            p.join() 
+            p.join()
+
+        # Write scores to file
+        np.savetxt(gsms_dir+'.txt', np.array(self.scores))
     
     def write_GSMs_info(self, gsms_info, filename):
         restraint_cols = gsms_info.columns.values
@@ -1229,7 +1135,6 @@ class AnalysisTrajectories(object):
         '''
         Use rmf_slice to extract the GSMs
         '''
-        out_scores = open(gsms_dir+'.txt', 'w')
         for row in gsms_info.itertuples():
             id = row.traj
             fr = int(row.MC_frame)
@@ -1237,8 +1142,8 @@ class AnalysisTrajectories(object):
             file = row.rmf3_file
             os.system('rmf_slice '+ id+'/'+file + ' '+gsms_dir+'/'+filename+'_'+str(id)+'_'+str(fr)+'.rmf3 --frame '+str(fr_rmf) )
             
-            # Write score to file
-            out_scores.write(str(row.Total_score)+'\n')
+            # Collect scores
+            self.scores.append(row.Total_score)
         out_scores.close()
             
     def create_gsms_dir(self, dir):
