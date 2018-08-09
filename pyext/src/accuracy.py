@@ -123,18 +123,20 @@ class AccuracyModels(object):
         out_summary.write('cluster mean min max N \n')
         for k, v in self.all_accu.iteritems():
             out = open(self.clustering_dir+'/accuracy_cl'+str(k)+'.dat','w')
-            vv = np.array(v)[:,1].astype(float)
-            out_summary.write(str(k)+'\t'+str(np.mean(vv))+'\t'+str(np.min(vv))+'\t'+str(np.max(vv))+'\t'+str(len(vv))+'\n')
-            T = []
-            for f, accu in v:
-                f_short = f.split('/')[-1]
-                run = 'run_'+f_short.split('_')[2]
-                frame = f_short.split('_')[3].split('.rmf3')[0]
-                score = self.S[(self.S['traj'] == run) & (self.S['MC_frame'] == float(frame))]['Total_score'].values[0]
-                T.append([score, accu])
-                out.write('%s\t%s\t%s \n'%(f_short,accu,score))
-            out.close()
-            self.score_accu[k] = np.array(T)
+            if len(np.array(v))> 0:
+                vv = np.array(v)[:,1].astype(float)
+                out_summary.write(str(k)+'\t'+str(np.mean(vv))+'\t'+str(np.min(vv))+'\t'+str(np.max(vv))+'\t'+str(len(vv))+'\n')
+                T = []
+                for f, accu in v:
+                    f_short = f.split('/')[-1]
+                    run = 'run_'+f_short.split('_')[2]
+                    frame = f_short.split('_')[3].split('.rmf3')[0]
+                    if len( self.S[(self.S['traj'] == run) & (self.S['MC_frame'] == float(frame))])>0:
+                        score = self.S[(self.S['traj'] == run) & (self.S['MC_frame'] == float(frame))]['Total_score'].values[0]
+                        T.append([score, accu])
+                        out.write('%s\t%s\t%s \n'%(f_short,accu,score))
+                out.close()
+                self.score_accu[k] = np.array(T)
         out_summary.close()
 
     def plot_accuracy_histograms(self):
@@ -143,10 +145,13 @@ class AccuracyModels(object):
         fig, ax = pl.subplots(figsize=(5.0, 5.0), nrows=1, ncols=1)
         palette = pl.get_cmap('Set1')
         colors = [palette(1.*i/len(clus_all)) for i in range(len(clus_all))]
+        print('--------',self.all_accu.keys())
         for i, clus in enumerate(clus_all):
-            A = np.array(self.all_accu[clus])[:,1].astype(float)
-            ax.hist(A, n_bins,  histtype='step',fill=False, color=colors[i],alpha=0.9)
-            ax.axvline(np.mean(A), color=colors[i], alpha=0.9)
+            if len(np.array(self.all_accu[clus]))> 0:
+                print('123', clus, np.array(self.all_accu[clus]))
+                A = np.array(self.all_accu[clus])[:,1].astype(float)
+                ax.hist(A, n_bins,  histtype='step',fill=False, color=colors[i],alpha=0.9)
+                ax.axvline(np.mean(A), color=colors[i], alpha=0.9)
              
         ax.set_title('Accuracy of selected models', fontsize=14)
         ax.set_xlabel('Accuracy (A)',fontsize=12)
