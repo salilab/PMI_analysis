@@ -402,8 +402,6 @@ class AnalysisTrajectories(object):
         # Convert into pandas DF
         column_names = [self.restraint_names[x] for x in sorted(self.restraint_names.keys())] + ['traj', 'rmf3_file']
         DF = pd.DataFrame(S_scores, columns = column_names)
-
-        DF.to_csv('analys/scores_traj.csv')
         
         # If some restraints need to be added
         if self.XLs_restraint and self.sum_XLs_restraint:
