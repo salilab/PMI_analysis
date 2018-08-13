@@ -246,7 +246,7 @@ class AnalysisTrajectories(object):
             self.xls_fields = self.atomic_XLs_info.values()
             
         if self.EM_restraint:
-            self.get_fields('GaussianEMRestraint', 'EM3D')
+            self.get_fields('GaussianEMRestraint_EM', 'EM3D')
             
         if self.Occams_restraint:
             self.get_fields('OccamsRestraint_Score', 'OccCon')
@@ -258,7 +258,7 @@ class AnalysisTrajectories(object):
             self.get_fields('OccamsPositionalRestraint_Score', 'OccPos')
             
         if self.pEMAP_restraint:
-            self.get_fields('SimplifiedPEMAP_Score', 'pEMAP')
+            self.get_fields('SimplifiedPEMAP_Score_None', 'pEMAP')
             
             # Percent of restraints satisfied
             self.pEMAP_satif = self.get_field_id(self.stat2_dict, 'SimplifiedPEMAP_Satisfied')
@@ -544,7 +544,6 @@ class AnalysisTrajectories(object):
                                                                          None,
                                                                          None,
                                                                          self.rmf_file_field)
-                print(S_tot_scores.head())
 
 
             print('The mean score, min score, and n frames are: ', traj_number,
@@ -870,7 +869,8 @@ class AnalysisTrajectories(object):
 
     def write_models_info(self):
         ''' Write info of all models after equilibration'''
-        
+       
+        print(self.S_all.keys(), len(self.S_all)) 
         for k, T in self.S_all.items():
             kk = k.split(self.dir_name)[-1].split('/')[0]
             T.to_csv(self.analysis_dir+'all_info_'+str(kk)+'.csv')
@@ -963,9 +963,11 @@ class AnalysisTrajectories(object):
  
         all_dfs = [self.S_all[dd] for dd in self.S_all.keys()]
         S_comb = pd.concat(all_dfs)
-        
+
+
         S_comb_sel = S_comb[selected_scores].iloc[::skip]
         S_comb_all = S_comb.iloc[::skip]       
+
  
         hdbsc = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size,
                                 min_samples=min_samples).fit(S_comb_sel)
