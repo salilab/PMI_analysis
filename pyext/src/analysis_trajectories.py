@@ -102,15 +102,21 @@ class AnalysisTrajectories(object):
     def set_analyze_XLs_restraint(self,
                                   get_nuisances = True,
                                   Multiple_XLs_restraints =  False,
+                                  ambiguos_XLs_restraint = False,
                                   XLs_cutoffs = {'DSSO':30.0}):
         self.XLs_restraint = True
         self.select_XLs_satisfaction = True
+        self.ambiguos_XLs_restraint = False
         if get_nuisances:
             self.XLs_restraint_nuisances = True
         if Multiple_XLs_restraints:
             self.Multiple_XLs_restraints = True
             self.sum_XLs_restraint = False
+        if ambiguos_XLs_restraint:
+            self.ambiguos_XLs_restraint = True
+            
         self.XLs_cutoffs = XLs_cutoffs
+        
 
     def set_analyze_atomic_XLs_restraint(self,
                                          get_nuisances = True,
@@ -158,9 +164,6 @@ class AnalysisTrajectories(object):
 
     def set_analyze_MembraneSurfaceLocation_restraint(self):
         self.MembraneSurfaceLocation_restraint = True
-
-    def set_select_by_XLs_satisfation(self):
-        self.select_EM_score = True
         
     def set_select_by_Total_score(self, score_cutoff):
         self.select_Total_score = True
@@ -286,8 +289,7 @@ class AnalysisTrajectories(object):
             
         if self.MembraneSurfaceLocation_restraint:
             self.get_fields('MembraneSurfaceLocation', 'MSL')
-
-        
+    
     def get_fields(self, name_stat_file, short_name):
         '''
         For each restraint, get the stat file field number
@@ -651,15 +653,25 @@ class AnalysisTrajectories(object):
         else:
             dist_columns = [x for x in S_dist.columns.values if 'Distance_' in x]
             cutoff = list(XLs_cutoffs.values())[0]
-        XLs_dist = np.array(S_dist[dist_columns])
+        XLs_dists = S_dist[dist_columns]
         
-        perc_per_step = []
-        for row in XLs_dist:
-            n_satif = 0
-            for i in row:
-                if i <= cutoff:
-                    n_satif += 1
-            perc_per_step.append(float(n_satif)/len(row))
+        # Check for ambiguity
+        if self.ambiguos_XLs_restraint == True:
+            ambiguous_XLs_dict = self.check_XLs_ambiguity(XLs_dists, cutoff)
+            perc_per_step = []
+            for idx, frame in XLs_dists.iterrows():
+                Ds = []
+                for k, v in ambiguous_XLs_dict.iteritems():
+                    Ds.append(min(frame[v]))
+                perc = float(sum(i<cutoff for i in Ds))/float(len(Ds))
+                perc_per_step.append(perc)
+        else:
+            perc_per_step = []
+            for idx, frame in XLs_dists.iterrows():
+                ss = [1 for i in frame if i<=cutoff]
+                perc = float(sum(ss))/float(len(frame))
+                perc_per_step.append(perc)
+        
         return perc_per_step
     
     def plot_scores_restraints(self, selected_scores, ts_eq, file_out):
@@ -860,7 +872,7 @@ class AnalysisTrajectories(object):
 
         psi_cols =  DF_XLs_psi.columns.values[1:]
         psi_vals = DF_XLs_psi[psi_cols]
-        if self.Multiple_XLs_restraints or self.Multiple_psi_values:
+        if self.multiple_XLs_restraints or self.Multiple_psi_values:
             self.psi_mean = psi_vals.mean()
         else:
             self.psi_mean = psi_vals.mean().mean()
@@ -1272,7 +1284,7 @@ class AnalysisTrajectories(object):
             cutoff = [v for k,v in self.XLs_cutoffs.items() if XLs_type in k][0]
         else:
             cutoff = list(self.XLs_cutoffs.values())[0]
-
+            
         # 4. Check, per XLs, how often it is satisfied
         satif_XLs_indv =  all_dists.apply(lambda x: float(len(x[x<cutoff]))/float(len(x)), axis = 0)
         if XLs_type:
@@ -1280,7 +1292,23 @@ class AnalysisTrajectories(object):
         else:
             satif_XLs_indv.to_csv(self.analysis_dir+'XLs_satisfaction_all.csv')
 
-       
+    def check_XLs_ambiguity(self, all_dists, cutoff):
+        xls_ids = {}
+        for i, xl in enumerate(all_dists.columns.values):
+            if 'CrossLinkingMassSpectrometryRestraint_Distance' in xl:
+                vals = xl.split('|')
+                id = vals[2].split('.')[0]
+                p1 = vals[3].split('.')[0]
+                r1 = vals[4]
+                p2 = vals[5].split('.')[0]
+                r2 = vals[6]
+                if id in xls_ids.keys():
+                    xls_ids[id].append(i)
+                else:
+                    xls_ids[id] = [i]
+        
+        return xls_ids
+                    
     def plot_pEMAP_distances(self, pEMAP_satif, file_out):
         n_bins = 20
         fig, ax = pl.subplots(figsize=(4.0, 4.0), nrows=1, ncols=1)
