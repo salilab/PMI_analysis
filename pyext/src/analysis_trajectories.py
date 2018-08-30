@@ -661,7 +661,7 @@ class AnalysisTrajectories(object):
             perc_per_step = []
             for idx, frame in XLs_dists.iterrows():
                 Ds = []
-                for k, v in ambiguous_XLs_dict.iteritems():
+                for k, v in ambiguous_XLs_dict.items():
                     Ds.append(min(frame[v]))
                 perc = float(sum(i<cutoff for i in Ds))/float(len(Ds))
                 perc_per_step.append(perc)
@@ -872,7 +872,7 @@ class AnalysisTrajectories(object):
 
         psi_cols =  DF_XLs_psi.columns.values[1:]
         psi_vals = DF_XLs_psi[psi_cols]
-        if self.multiple_XLs_restraints or self.Multiple_psi_values:
+        if self.Multiple_XLs_restraints or self.Multiple_psi_values:
             self.psi_mean = psi_vals.mean()
         else:
             self.psi_mean = psi_vals.mean().mean()
@@ -882,7 +882,6 @@ class AnalysisTrajectories(object):
     def write_models_info(self):
         ''' Write info of all models after equilibration'''
        
-        print(self.S_all.keys(), len(self.S_all)) 
         for k, T in self.S_all.items():
             kk = k.split(self.dir_name)[-1].split('/')[0]
             T.to_csv(self.analysis_dir+'all_info_'+str(kk)+'.csv')
@@ -962,7 +961,7 @@ class AnalysisTrajectories(object):
                 self.gsms_frames[dd] = sele['MC_frame']    
 
         return good_half
-
+    
     def do_hdbscan_clustering(self,
                               selected_scores,
                               min_cluster_size=150,
@@ -972,15 +971,15 @@ class AnalysisTrajectories(object):
         '''
         DO HDBSCAN clustering for selected restraint and/or nuisance parameters
         '''
- 
-        all_dfs = [self.S_all[dd] for dd in self.S_all.keys()]
+
+        all_dfs = [self.S_all[dd] for dd in np.sort(self.S_all.keys())]
         S_comb = pd.concat(all_dfs)
-
-
+        
         S_comb_sel = S_comb[selected_scores].iloc[::skip]
         S_comb_all = S_comb.iloc[::skip]       
 
- 
+        
+        
         hdbsc = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size,
                                 min_samples=min_samples).fit(S_comb_sel)
         labels = hdbsc.labels_
@@ -988,6 +987,12 @@ class AnalysisTrajectories(object):
         # Add clusters labels
         S_comb_sel = S_comb_sel.assign(cluster = pd.Series(hdbsc.labels_, index=S_comb_sel.index).values)
         S_comb_all = S_comb_all.assign(cluster = pd.Series(hdbsc.labels_, index=S_comb_all.index).values)
+        # Add cluster labels also to XLs info if available
+        # XLs information
+        if self.XLs_restraint == True:
+            self.all_XLs_dist_clusters = self.all_XLs_dist.iloc[::skip]
+            self.all_XLs_dist_clusters = self.all_XLs_dist_clusters.assign(cluster = pd.Series(hdbsc.labels_, index=self.all_XLs_dist_clusters.index).values)
+            self.all_XLs_dist_clusters.to_csv(self.analysis_dir+'XLs_distances_all_cluster.csv')
         
         print('Number of unique clusters: ', len(np.unique(hdbsc.labels_)))
         
@@ -1264,18 +1269,21 @@ class AnalysisTrajectories(object):
             col_sel = [v for v in self.S_dist_all[traj_0].columns.values if 'Distance' in v and XLs_type in v]
         else:
             col_sel = [v for v in self.S_dist_all[traj_0].columns.values if 'Distance' in v]
-        i = 0
+    
         # 1. Get distances for all models
-        for traj in self.S_dist_all.keys():
+        for i, traj in enumerate(np.sort(self.S_dist_all.keys())):
             t = [x for x in traj.split('/') if self.dir_name in x][0]
             traj_number = int(t.split(self.dir_name)[1])
             T = self.S_dist_all[traj]
+            T.insert(0, 'traj_number', traj_number)
             T.to_csv(self.analysis_dir+'XLs_distances_'+str(traj_number)+'.csv')
             if i ==0 :
                 all_dists = T
             else:
-                all_dist.append(T, ignore_dist = True)
-        
+                all_dists = all_dists.append(T, ignore_index = True)
+
+        self.all_XLs_dist = all_dists
+                
         # 2. All distances, from all traj
         all_dists.to_csv(self.analysis_dir+'XLs_distances_all.csv')
          
@@ -1295,7 +1303,7 @@ class AnalysisTrajectories(object):
     def check_XLs_ambiguity(self, all_dists, cutoff):
         xls_ids = {}
         for i, xl in enumerate(all_dists.columns.values):
-            if 'CrossLinkingMassSpectrometryRestraint_Distance' in xl:
+            if 'Distance_' in xl:
                 vals = xl.split('|')
                 id = vals[2].split('.')[0]
                 p1 = vals[3].split('.')[0]
@@ -1303,11 +1311,62 @@ class AnalysisTrajectories(object):
                 p2 = vals[5].split('.')[0]
                 r2 = vals[6]
                 if id in xls_ids.keys():
-                    xls_ids[id].append(i)
+                    xls_ids[id].append(xl)
                 else:
-                    xls_ids[id] = [i]
+                    xls_ids[id] = [xl]
         
         return xls_ids
+
+    def plot_XLs_distances(self, cluster = 0, file_out = 'plot_XLs_distance_distributions.pdf'):
+        dist_columns = [x for x in self.all_XLs_dist_clusters.columns.values if 'Distance_' in x]
+        dXLs_cluster = self.all_XLs_dist_clusters.loc[self.all_XLs_dist_clusters['cluster'] == cluster, dist_columns]
+        
+        dXLs_unique = pd.DataFrame()
+        if self.ambiguos_XLs_restraint == True:
+            ambiguous_XLs_dict = self.check_XLs_ambiguity(dXLs_cluster, 35.0)
+            for k, v in ambiguous_XLs_dict.items():
+                XLs_sele = dXLs_cluster.loc[:,v].mean()
+                XLs_min = XLs_sele.idxmin()
+                dXLs_unique[XLs_min] =  dXLs_cluster[XLs_min]
+        else:
+            dXLs_unique = dXLs_cluster    
+    
+        # Get distances and order based on mean
+        columns = ['entry', 'mean', 'id']
+        XLs_ids = pd.DataFrame(columns = columns)
+        for i, v in enumerate(dXLs_unique.columns.values):
+            if 'Distance' in v:
+                m = np.mean(dXLs_unique[v])
+                ll = v.split('||')[1]
+                label = '|'.join(ll.split('|')[1:5]) 
+                XLs_ids = XLs_ids.append(pd.Series([int(i),m,label], index=columns), ignore_index=True)
+        XLs_ids = XLs_ids.sort_values(by=['mean'])
+        labels_ordered = XLs_ids['id'].values
+
+        S_sorted = np.array(dXLs_unique)[:, XLs_ids['entry'].values.astype('int')]
+        n_xls = len(labels_ordered)
+        n_plots = math.ceil(n_xls/40.0)
+        n_frac = math.ceil(n_xls/float(n_plots))
+    
+        # Generate plot
+        fig, ax = pl.subplots(figsize=(12, 6.0*n_plots), nrows=n_plots, ncols=1)
+        for i in range(n_plots):
+            if i == n_plots-1:
+                bb1 = ax[i].boxplot(S_sorted[:,(i*n_frac):-1],patch_artist=True, showfliers=False)
+                ax[i].set_xticklabels(labels_ordered[(i*n_frac):-1],rotation='vertical',fontsize=10)
+                ax[i].set_ylim([0,np.max(S_sorted[:,-1])+20.0])
+            else:
+                bb1 = ax[i].boxplot(S_sorted[:,(i*n_frac):((i+1)*n_frac)],patch_artist=True, showfliers=False)
+                ax[i].set_xticklabels(labels_ordered[(i*n_frac):((i+1)*n_frac)],rotation='vertical',fontsize=10)
+                ax[i].set_ylim([0,np.max(S_sorted[:,(i+1)*n_frac])+20.0])
+            ax[i].axhline(y=35.0,color='green',linestyle='-')
+            ax[i].set_xticks(range(1,n_frac+1))
+            
+            ax[i].set_ylabel('XLs distances (A)')
+            ax[i].set_title('XLs distance distributions')
+
+        pl.tight_layout()
+        fig.savefig(self.analysis_dir+file_out)
                     
     def plot_pEMAP_distances(self, pEMAP_satif, file_out):
         n_bins = 20
