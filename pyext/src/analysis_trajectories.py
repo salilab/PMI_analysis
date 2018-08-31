@@ -1130,17 +1130,17 @@ class AnalysisTrajectories(object):
             
         stats_XLs = pd.DataFrame()
         stats_XLs['mean'] = dXLs_cluster.mean()
-        stats_XLs['std'] = dXLs_cluster.mean()
-        stats_XLs['min'] = dXLs_cluster.mean()
-        stats_XLs['max'] = dXLs_cluster.mean()
+        stats_XLs['std'] = dXLs_cluster.std()
+        stats_XLs['min'] = dXLs_cluster.min()
+        stats_XLs['max'] = dXLs_cluster.max()
         stats_XLs['perc_satif'] = dXLs_cluster.apply(lambda x: float(len(x[x<cutoff]))/float(len(x)), axis = 0)
 
         if XLs_type:
-            stats_XLs.to_csv(self.analysis_dir+'XLs_satisfaction_'+XLs_type+'_cl'+str(cluster)+'.csv')
-            dXLs_cluster.to_csv(self.analysis_dir+'XLs_distances_'+XLs_type+'_cl'+str(cluster)+'.csv')
+            stats_XLs.to_csv(self.analysis_dir+'XLs_satisfaction_'+XLs_type+'_cluster_'+str(cluster)+'.csv')
+            dXLs_cluster.to_csv(self.analysis_dir+'XLs_distances_'+XLs_type+'_cluster_'+str(cluster)+'.csv')
         else:
-            stats_XLs.to_csv(self.analysis_dir+'XLs_satisfaction_cl'+str(cluster)+'.csv')
-            dXLs_cluster.to_csv(self.analysis_dir+'XLs_distances_cl'+str(cluster)+'.csv')
+            stats_XLs.to_csv(self.analysis_dir+'XLs_satisfaction_cluster_'+str(cluster)+'.csv')
+            dXLs_cluster.to_csv(self.analysis_dir+'XLs_distances_cluster_'+str(cluster)+'.csv')
          
     def plot_XLs_satisfaction(self, t, perc_per_step, nuis_vals, ts_max, file_out):
         
