@@ -102,18 +102,18 @@ class AnalysisTrajectories(object):
     def set_analyze_XLs_restraint(self,
                                   get_nuisances = True,
                                   Multiple_XLs_restraints =  False,
-                                  ambiguos_XLs_restraint = False,
+                                  ambiguous_XLs_restraint = False,
                                   XLs_cutoffs = {'DSSO':30.0}):
         self.XLs_restraint = True
         self.select_XLs_satisfaction = True
-        self.ambiguos_XLs_restraint = False
+        self.ambiguous_XLs_restraint = False
         if get_nuisances:
             self.XLs_restraint_nuisances = True
         if Multiple_XLs_restraints:
             self.Multiple_XLs_restraints = True
             self.sum_XLs_restraint = False
-        if ambiguos_XLs_restraint:
-            self.ambiguos_XLs_restraint = True
+        if ambiguous_XLs_restraint:
+            self.ambiguous_XLs_restraint = True
             
         self.XLs_cutoffs = XLs_cutoffs
         
@@ -224,7 +224,7 @@ class AnalysisTrajectories(object):
                 ss = sorted(list([v+'_std' for v in XLs_nuis.keys()]))
                 self.DF_XLs_psi = pd.DataFrame(columns=['Trajectory']+mm+ss)
             self.xls_fields = self.XLs_info.values()
-
+            
         # Atomic XLs restraint
         if self.atomic_XLs_restraint:
             self.get_fields('AtomicXLRestraint_Score', 'atomic_XLs')
@@ -246,7 +246,12 @@ class AnalysisTrajectories(object):
                 mm = sorted(list([v for v in atomic_XLs_nuis.keys()]))
                 ss = sorted(list([v+'_std' for v in atomic_XLs_nuis.keys()]))
                 self.DF_atomic_XLs_psi = pd.DataFrame(columns=['Trajectory']+mm+ss)
-            self.xls_fields = self.atomic_XLs_info.values()
+
+        # XLs info    
+        self.XLs_names = self.XLs_info.keys()
+        self.XLs_fields = [self.XLs_info[k] for k in self.XLs_names]
+        if self.ambiguous_XLs_restraint == True:
+            self.ambiguous_XLs_dict = self.check_XLs_ambiguity(self.XLs_names)
             
         if self.EM_restraint:
             self.get_fields('GaussianEMRestraint_EM', 'EM3D')
@@ -289,7 +294,7 @@ class AnalysisTrajectories(object):
             
         if self.MembraneSurfaceLocation_restraint:
             self.get_fields('MembraneSurfaceLocation', 'MSL')
-    
+            
     def get_fields(self, name_stat_file, short_name):
         '''
         For each restraint, get the stat file field number
@@ -478,6 +483,7 @@ class AnalysisTrajectories(object):
 
         #rmf_file = get_field_id(stat2_dict, 'rmf_file')
         #rmf_frame_index = get_field_id(stat2_dict, 'rmf_frame_index')
+
         if isinstance(out_dirs_sel, str):
             out_dirs_sel = [out_dirs_sel]
         
@@ -583,7 +589,7 @@ class AnalysisTrajectories(object):
                     ts_eq.append(t)
                 except:
                     ts_eq.append(0)
-            print('ts_eq', ts_eq)
+            print('Trajectory, ts_eqs: ',traj, ts_eq)
             ts_max = np.max(ts_eq)+self.th
         
             # Plot the scores and restraint satisfaction
@@ -600,23 +606,19 @@ class AnalysisTrajectories(object):
                 
             # Check how many XLs are satisfied
             if self.XLs_restraint:
-                S_tot_scores, S_dist = self.analyze_XLs_values(S_tot_scores,
-                                                               S_dist,
-                                                               self.XLs_cutoffs,
-                                                               atomic_XLs = False,
-                                                               traj_number = traj_number,
-                                                               ts_max = ts_max )
-            
+                S_tot_scores, S_dist = self.analyze_trajectory_XLs(S_tot_scores,
+                                                                   S_dist,
+                                                                   atomic_XLs = False,
+                                                                   traj_number = traj_number,
+                                                                   ts_max = ts_max)
+                
             if self.atomic_XLs_restraint:
-                S_tot_scores, S_dist = self.analyze_XLs_values(S_tot_scores,
-                                                               S_dist,
-                                                               self.atomic_XLs_cutoffs,
-                                                               atomic_XLs = True,
-                                                               traj_number = traj_number,
-                                                               ts_max = ts_max )
+                S_tot_scores, S_dist = self.analyze_trajectory_XLs(S_tot_scores,
+                                                                   S_dist,
+                                                                   atomic_XLs = True,
+                                                                   traj_number = traj_number,
+                                                                   ts_max = ts_max)
                                                                                                  
-            # Add scores to dictionary XLs_satif
-            
             # Add half info
             if out in self.dir_halfA:
                 S_tot_scores = S_tot_scores.assign(half = pd.Series(['A']*len(S_tot_scores), index=S_tot_scores.index).values)
@@ -636,43 +638,6 @@ class AnalysisTrajectories(object):
         For single field, get number of fields in stat file 
         '''
         return [k for k in dict.keys() if dict[k]==val]
-
-    def get_XLs_satisfaction(self, S_dist, XLs_cutoffs, atomic_XLs, type_XLs = None, type_psi = None):
-        if type_XLs and not type_psi:
-            dist_columns = [x for x in S_dist.columns.values if ('Distance_' in x and type_XLs in x)]
-            cutoff = XLs_cutoffs[type_XLs]
-        elif type_psi and not type_XLs:
-            dist_columns = [x for x in S_dist.columns.values if ('Distance_' in x and type_psi in x)]
-            cutoff = list(XLs_cutoffs.values())[0]
-        elif type_XLs and type_psi:
-            dist_columns = [x for x in S_dist.columns.values if ('Distance_' in x and type_XLs in x and type_psi in x)]
-            cutoff = XLs_cutoffs[type_XLs]
-        elif atomic_XLs:
-            dist_columns = [x for x in S_dist.columns.values if ('BestDist' in x)]
-            cutoff = list(XLs_cutoffs.values())[0]
-        else:
-            dist_columns = [x for x in S_dist.columns.values if 'Distance_' in x]
-            cutoff = list(XLs_cutoffs.values())[0]
-        XLs_dists = S_dist[dist_columns]
-        
-        # Check for ambiguity
-        if self.ambiguos_XLs_restraint == True:
-            ambiguous_XLs_dict = self.check_XLs_ambiguity(XLs_dists, cutoff)
-            perc_per_step = []
-            for idx, frame in XLs_dists.iterrows():
-                Ds = []
-                for k, v in ambiguous_XLs_dict.items():
-                    Ds.append(min(frame[v]))
-                perc = float(sum(i<cutoff for i in Ds))/float(len(Ds))
-                perc_per_step.append(perc)
-        else:
-            perc_per_step = []
-            for idx, frame in XLs_dists.iterrows():
-                ss = [1 for i in frame if i<=cutoff]
-                perc = float(sum(ss))/float(len(frame))
-                perc_per_step.append(perc)
-        
-        return perc_per_step
     
     def plot_scores_restraints(self, selected_scores, ts_eq, file_out):
         '''
@@ -700,185 +665,8 @@ class AnalysisTrajectories(object):
                 axes[i+n_res].set_ylabel('Density',fontsize=12)
 
         pl.tight_layout(pad=0.5, w_pad=0.1, h_pad=2.0)
-        fig.savefig(self.analysis_dir+file_out) 
-
-    def analyze_XLs_values(self, S_tot_scores, S_dist, XLs_cutoffs, atomic_XLs, traj_number, ts_max):
-
-        sel_nuis = [v for v in S_dist.columns.values if 'Psi' in v]
-                
-        # Get XLS satisfaction, append to S_dist
-        XLs_satif_fields = []
-        if self.Multiple_XLs_restraints:
-            for type_XLs in self.XLs_cutoffs.keys():
-                XLs_satif = self.get_XLs_satisfaction(S_dist, XLs_cutoffs, atomic_XLs, type_XLs = type_XLs)
-                temp_name = 'XLs_satif_'+type_XLs.rstrip()
-                S_tot_scores = S_tot_scores.assign(XLs_satif=pd.Series(XLs_satif))
-                S_tot_scores.rename(columns={'XLs_satif':temp_name}, inplace=True)
-                XLs_satif_fields.append(temp_name)
-        elif self.Multiple_psi_values:
-            all_psis = [v.split(self.psi_head)[1] for v in  self.DF_XLs_psi.columns.values[1:] if 'std' not in v]
-            for type_psi in all_psis:
-                XLs_satif = self.get_XLs_satisfaction(S_dist, XLs_cutoffs, atomic_XLs, type_psi = type_psi)
-                temp_name = 'XLs_satif_'+type_psi
-                S_tot_scores = S_tot_scores.assign(XLs_satif=pd.Series(XLs_satif))
-                S_tot_scores.rename(columns={'XLs_satif':temp_name}, inplace=True)
-                XLs_satif_fields.append(temp_name)
-        else:
-            XLs_satif = self.get_XLs_satisfaction(S_dist, XLs_cutoffs, atomic_XLs)
-            S_tot_scores = S_tot_scores.assign(XLs_satif=pd.Series(XLs_satif))
-            XLs_satif_fields.append('XLs_satif')
-            
-        file_out_xls = 'plot_XLs_%s.pdf'%(traj_number)
-        self.plot_XLs_satisfaction(S_tot_scores['MC_frame'].values, S_tot_scores[XLs_satif_fields], S_dist[sel_nuis], ts_max, file_out_xls)
-        
-        # Add percent of satisfied XLs to DF
-        if self.XLs_restraint_nuisances:
-            nuis_mean = []
-            nuis_std = []
-            nuis_fields = sorted([n for n in S_dist.columns.values if 'Psi' in n])
-            for nuis in sorted(nuis_fields):
-                # Create df instead of dic
-                nuis_mean.append(np.mean(S_dist[nuis].loc[ts_max:]))
-                nuis_std.append(np.std(S_dist[nuis].loc[ts_max:]))
-            self.XLs_nuis[traj_number] = list(nuis_mean) + list(nuis_std)
-
-        return S_tot_scores, S_dist
-    
-    def plot_XLs_satisfaction(self, t, perc_per_step, nuis_vals, ts_max, file_out):
-        c = ['gold', 'orange', 'red', 'blue', 'green']
-        n_bins = 20
-        
-        fig, ax = pl.subplots(figsize=(10.0, 4.0), nrows=1, ncols=3)
-        axes = ax.flatten()
-        for i, c in enumerate(perc_per_step.columns.values):
-            label = c
-            axes[0].plot(t[::100], perc_per_step[c].loc[::100], label=label)
-        axes[0].set_title('XLs restraint satisfaction', fontsize=14)
-        axes[0].set_xlabel('Step',fontsize=12)
-        axes[0].set_ylabel('Percent Satisfied',fontsize=12)
-        handles, labels = ax[0].get_legend_handles_labels()
-        ax[0].legend(handles[::-1], labels[::-1])
-
-        for i, c in enumerate(nuis_vals.columns.values):
-            label = c.split('CrossLinkingMassSpectrometryRestraint_')[-1]
-            axes[1].plot(t[::100], nuis_vals[c].loc[::100], label=label)
-        axes[1].set_title('Psi nuisance parameters', fontsize=14)
-        axes[1].set_xlabel('Step',fontsize=12)
-        axes[1].set_ylabel('Psi',fontsize=12)
-        handles, labels = ax[1].get_legend_handles_labels()
-        ax[1].legend(handles[::-1], labels[::-1])
-
-        for i,c in enumerate(nuis_vals.columns.values):
-            label = c.split('CrossLinkingMassSpectrometryRestraint_')[-1]
-            axes[2].hist(nuis_vals[c].loc[ts_max:],n_bins, histtype='step',fill=False, label=label)
-            
-        axes[2].set_title('Psi nuisance parameters', fontsize=14)
-        axes[2].set_xlabel('Psi',fontsize=12)
-        axes[2].set_ylabel('Density',fontsize=12)
-        handles, labels = ax[1].get_legend_handles_labels()
-        ax[2].legend(handles[::-1], labels[::-1])
-        
-        pl.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.5)
         fig.savefig(self.analysis_dir+file_out)
-
-    def plot_selected_fields(self, field1, field2, k=None):
-        from sklearn.cluster import KMeans
-        from sklearn.externals import joblib
-
-        s1 = [self.S_all[dd][field1] for dd in self.S_all.keys()]
-        s2 = [self.S_all[dd][field2] for dd in self.S_all.keys()]
-
-        # Now, for GSMs
-        traj_0 = self.S_all.keys()[0]
-        col_sel = [v for v in self.S_all[traj_0].columns.values if field1 in v or field2 in v]
-        i=0
-        for traj in self.S_all.keys():
-            T = self.S_all[traj]
-            # Get MC frames for GSMs A and B
-            frames_sel = self.gsms_frames[traj]
-            if i == 0 and len(frames_sel) > 0:
-                all_GSMs_sel = T.loc[T['MC_frame'].isin(frames_sel)][col_sel]
-                i =  1
-            elif i==1 and len(frames_sel) > 0:
-                all_GSMs_sel.append(T.loc[T['MC_frame'].isin(frames_sel)][col_sel], ignore_index = True)
-        all_GSMs_sel = np.array(all_GSMs_sel)
-        
-        d1 =  pd.concat(s1)
-        d2 =  pd.concat(s2)
-
-        D = np.array([d1,d2]).T
-        
-        file_out = 'scores_'+field1+'_'+field2+'.pdf'
-        xi = np.min(D[:,0])
-        xe = np.max(D[:,0])
-        yi = np.min(D[:,1])
-        ye = np.max(D[:,1])
-
-        fig, ax = pl.subplots(figsize=(10.0, 4.0), nrows=1, ncols=3)
-        ax[0].scatter(D[::20,0], D[::20,1],alpha=0.8, s=3)
-        ax[0].set_title('Scores distributions', fontsize=14)
-        ax[0].set_xlabel(field1+' (a.u.)',fontsize=12)
-        ax[0].set_ylabel(field2+' (a.u.)',fontsize=12)
-        ax[0].set_xlim(xi,xe)
-        ax[0].set_ylim(yi,ye)
-
-        # Kmeans
-        cmap='viridis'
-        kmeans = KMeans(n_clusters=5)
-        kmeans.fit(D)
-        y_kmeans = kmeans.predict(D[::20])
-        centers = kmeans.cluster_centers_
        
-        ax[1].scatter(D[::20,0],D[::20,1], c=y_kmeans, s=3, cmap=cmap)
-        ax[1].scatter(centers[:,0], centers[:,1],c='grey',s=100, alpha=0.75)
-        ax[1].set_title('Clustered scores distributions (KMeans)', fontsize=14)
-        ax[1].set_xlabel(field1+' (a.u.)',fontsize=12)
-        ax[1].set_ylabel(field2+' (a.u.)',fontsize=12)
-        ax[1].set_xlim(xi,xe)
-        ax[1].set_ylim(yi,ye)
-        
-        ax[2].scatter(all_GSMs_sel[::20,0],all_GSMs_sel[::20,1],alpha=0.8, s=3)
-        ax[2].set_title('Scores distributions', fontsize=14)
-        ax[2].set_xlabel(field1+' (a.u.)',fontsize=12)
-        ax[2].set_ylabel(field2+' (a.u.)',fontsize=12)
-        ax[2].set_xlim(xi,xe)
-        ax[2].set_ylim(yi,ye)
-        
-        pl.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.5)
-        fig.savefig(self.analysis_dir+file_out)
-
-        # Save model
-        filename = self.analysis_dir+'/finalized_model_'+field1+'_'+field2+'.dat'
-        joblib.dump(kmeans, filename)
-
-        print('Shape D, GSMs', np.shape(D), np.shape(all_GSMs_sel))
-        
-    def get_Psi_stats(self, atomic_XLs = False):
-        '''
-        Organize Psi values into DataFrame
-        Get mean value for extracting models 
-        (Does not work for atomic XLs restraint)
-        '''
-        if atomic_XLs:
-            DF_XLs_psi  =  self.DF_atomic_XLs_psi
-        else:
-            DF_XLs_psi  =  self.DF_XLs_psi
-
-        
-        for k,v in self.XLs_nuis.items():
-            DF_XLs_psi = DF_XLs_psi.append(pd.Series([k]+v, index = DF_XLs_psi.columns.values), ignore_index=True) 
-
-        DF_XLs_psi.to_csv(self.analysis_dir+'XLs_all_Psi.csv')
-
-        psi_cols =  DF_XLs_psi.columns.values[1:]
-        psi_vals = DF_XLs_psi[psi_cols]
-        if self.Multiple_XLs_restraints or self.Multiple_psi_values:
-            self.psi_mean = psi_vals.mean()
-        else:
-            self.psi_mean = psi_vals.mean().mean()
-           
-        print('The average XLs Psi parameter is: ', self.psi_mean)
-
     def write_models_info(self):
         ''' Write info of all models after equilibration'''
        
@@ -894,79 +682,12 @@ class AnalysisTrajectories(object):
             k = f.split('all_info_')[-1].split('.csv')[0]
             df = pd.read_csv(f)
             self.S_all[k] = df
-    
-    def do_GSMs_selection(self, dir_half):
-        '''
-        Select GSMs based on a series (or combination) of conditions.
-        Not all possible conditions/combinations are implemented
-        Need to extend
-        '''
-    
-        good_half = []
-        for dd in dir_half:
-            T = self.S_all[dd]
-            all_masks = []
-            if self.select_XLs_satisfaction == True:
-                
-                if self.Multiple_psi_values == True:
-                    print('Selecting models based on multiple Psi values')
-                    XLs_psi_cutoffs = {}
-                    all_psis = [v.split('_Psi_')[1] for v in  self.DF_XLs_psi.columns.values[1:] if 'std' not in v]
-                    for psi_id in all_psis:
-                        satif_field = [field for field in T.columns.values if (psi_id in field and 'satif' in field)][0]
-                        psi_field = [field for field in self.psi_mean.index.values if psi_id in field if 'std' not in field]
-                        psi_val = float(self.psi_mean[psi_field])
-                        psi_std = float(self.psi_mean[psi_field[0]+'_std'])
-                        XLs_psi_cutoffs[satif_field] = 1.0-7.0*psi_val
-                    # Selected XLs by different psi
-                    vv = [XLs_psi_cutoffs[v] for v in XLs_psi_cutoffs.keys()]
-                    mask_XLs = (T[list(XLs_psi_cutoffs.keys())] >= pd.Series(vv, index=XLs_psi_cutoffs.keys())).all(axis=1)
-                    all_masks.append(mask_XLs)
-
-                # Check it still works with multiple differernt XL restraints
-                #elif self.Multiple_psi_values == True and self.Multiple_XLs_restraints == False:
-                #elif self.Multiple_psi_values == False and self.Multiple_XLs_restraints == True:
-
-                else:
-                   XLs_cutoffs = {}
-                   XLs_cutoffs['XLs_sum'] = (1-self.psi_mean)
-                   mask_XLs = (T[XLs_cutoffs.keys()] <= pd.Series(XLs_cutoffs)).all(axis=1)
-                   all_masks.append(mask_XLs) 
-
-            if self.select_EM_score == True:
-                EM_cutoffs = {}
-                EM_cutoffs['EM3D_sum'] = self.cutoff_EM_score
-                mask_EM = (T[EM_cutoffs.keys()] <= pd.Series(EM_cutoffs)).all(axis=1)
-                all_masks.append(mask_EM)
-                
-            if self.select_Total_score == True:
-                Total_score_cutoffs = {}
-                Total_score_cutoffs['Total_score'] = self.cutoff_Total_score
-                mask_Total = (T[Total_score_cutoffs.keys()] <= pd.Series(Total_score_cutoffs)).all(axis=1)
-                all_masks.append(mask_Total)
-
-            # Select based on the intersection of all masks
-            if len(all_masks)>0:
-                mask = pd.concat(all_masks, axis = 1).all(axis=1)
-                sele = T.loc[mask,:]
-                good_half.append(sele)
-            else:
-                sele = T
-                good_half.append(sele)
-
-            # Add frames to dictionary
-            if dd in self.gsms_frames.keys():
-                self.gsms_frames[dd].append(sele['MC_frame'])   
-            else:
-                self.gsms_frames[dd] = sele['MC_frame']    
-
-        return good_half
-    
-    def do_hdbscan_clustering(self,
-                              selected_scores,
-                              min_cluster_size=150,
-                              min_samples=5,
-                              skip=1):
+       
+    def hdbscan_clustering(self,
+                           selected_scores,
+                           min_cluster_size=150,
+                           min_samples=5,
+                           skip=1):
 
         '''
         DO HDBSCAN clustering for selected restraint and/or nuisance parameters
@@ -978,8 +699,6 @@ class AnalysisTrajectories(object):
         S_comb_sel = S_comb[selected_scores].iloc[::skip]
         S_comb_all = S_comb.iloc[::skip]       
 
-        
-        
         hdbsc = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size,
                                 min_samples=min_samples).fit(S_comb_sel)
         labels = hdbsc.labels_
@@ -987,23 +706,23 @@ class AnalysisTrajectories(object):
         # Add clusters labels
         S_comb_sel = S_comb_sel.assign(cluster = pd.Series(hdbsc.labels_, index=S_comb_sel.index).values)
         S_comb_all = S_comb_all.assign(cluster = pd.Series(hdbsc.labels_, index=S_comb_all.index).values)
+
         # Add cluster labels also to XLs info if available
-        # XLs information
         if self.XLs_restraint == True:
-            self.all_XLs_dist_clusters = self.all_XLs_dist.iloc[::skip]
-            self.all_XLs_dist_clusters = self.all_XLs_dist_clusters.assign(cluster = pd.Series(hdbsc.labels_, index=self.all_XLs_dist_clusters.index).values)
-            self.all_XLs_dist_clusters.to_csv(self.analysis_dir+'XLs_distances_all_cluster.csv')
-        
+            all_dist_dfs = [self.S_dist_all[dd] for dd in np.sort(self.S_dist_all.keys())]
+            S_comb_dist = pd.concat(all_dist_dfs).iloc[::skip]
+            self.S_comb_dist = S_comb_dist.assign(cluster = pd.Series(hdbsc.labels_, index=S_comb_dist.index).values)
+            
         print('Number of unique clusters: ', len(np.unique(hdbsc.labels_)))
         
         # Write and plot info from clustering
         self.plot_hdbscan_clustering(S_comb_sel, selected_scores)
-        self.do_write_hdbscan_clustering(S_comb_all)
+        self.write_hdbscan_clustering(S_comb_all)
 
         S_comb_sel = S_comb_sel.assign(half = pd.Series(S_comb_all['half'],index=S_comb_sel.index).values)
-        self.do_write_hdbscan_clustering_info(S_comb_sel)
+        self.write_summary_hdbscan_clustering(S_comb_sel)
 
-    def do_write_hdbscan_clustering_info(self, S_comb_sel):
+    def write_summary_hdbscan_clustering(self, S_comb_sel):
 
         ''' 
         Write clustering summary information 
@@ -1023,7 +742,11 @@ class AnalysisTrajectories(object):
             print('Cluster number, number of models: ', cl, n_models)
         out.close()
 
-    def do_write_hdbscan_clustering(self, S_comb):
+    def plot_hdbscan_trajectories_info(self, cluster):
+        # TO DO
+        return 0
+
+    def write_hdbscan_clustering(self, S_comb):
 
         ''' 
         Write the frames information for each cluster
@@ -1102,7 +825,7 @@ class AnalysisTrajectories(object):
             if s1 == s2:
                 ax.hist(S_comb_sel[s1], 20, histtype='step',color='b', alpha=0.5)
             else:
-                ax.scatter(S_comb_sel[s1],S_comb_sel[s2], c=np.array(cluster_colors),s=3.0,alpha=0.3)
+                ax.scatter(S_comb_sel[s2],S_comb_sel[s1], c=np.array(cluster_colors),s=3.0,alpha=0.3)
         
             i += 1
                 
@@ -1234,6 +957,7 @@ class AnalysisTrajectories(object):
         RH2 = np.array(RH2)
 
         hits = 0
+        n = 0
         for s in range(len(RH1)-1):
             dA = RH1[s,1]-RH1[s+1,1]
             dB = RH2[s,1]-RH2[s+1,1]
@@ -1255,54 +979,14 @@ class AnalysisTrajectories(object):
         pl.close()
 
         return n
-
-    def get_XLs_details(self, XLs_type = None):
+     
+    def check_XLs_ambiguity(self, all_keys):
         '''
-        For GSM, determine for each XLs how often it is satisfied.
+        Input: DF with XLs distances
+        Output: Dictionary of XLs that should be treated as ambiguous
         '''
-
-        if len(self.S_dist_all) == 0:
-            return 0
-        
-        traj_0 = self.S_dist_all.keys()[0]
-        if XLs_type:
-            col_sel = [v for v in self.S_dist_all[traj_0].columns.values if 'Distance' in v and XLs_type in v]
-        else:
-            col_sel = [v for v in self.S_dist_all[traj_0].columns.values if 'Distance' in v]
-    
-        # 1. Get distances for all models
-        for i, traj in enumerate(np.sort(self.S_dist_all.keys())):
-            t = [x for x in traj.split('/') if self.dir_name in x][0]
-            traj_number = int(t.split(self.dir_name)[1])
-            T = self.S_dist_all[traj]
-            T.insert(0, 'traj_number', traj_number)
-            T.to_csv(self.analysis_dir+'XLs_distances_'+str(traj_number)+'.csv')
-            if i ==0 :
-                all_dists = T
-            else:
-                all_dists = all_dists.append(T, ignore_index = True)
-
-        self.all_XLs_dist = all_dists
-                
-        # 2. All distances, from all traj
-        all_dists.to_csv(self.analysis_dir+'XLs_distances_all.csv')
-         
-        # 3. Get XLs cutoff
-        if XLs_type:
-            cutoff = [v for k,v in self.XLs_cutoffs.items() if XLs_type in k][0]
-        else:
-            cutoff = list(self.XLs_cutoffs.values())[0]
-            
-        # 4. Check, per XLs, how often it is satisfied
-        satif_XLs_indv =  all_dists.apply(lambda x: float(len(x[x<cutoff]))/float(len(x)), axis = 0)
-        if XLs_type:
-            satif_XLs_indv.to_csv(self.analysis_dir+'XLs_satisfaction_all_'+XLs_type+'.csv')    
-        else:
-            satif_XLs_indv.to_csv(self.analysis_dir+'XLs_satisfaction_all.csv')
-
-    def check_XLs_ambiguity(self, all_dists, cutoff):
         xls_ids = {}
-        for i, xl in enumerate(all_dists.columns.values):
+        for i, xl in enumerate(all_keys):
             if 'Distance_' in xl:
                 vals = xl.split('|')
                 id = vals[2].split('.')[0]
@@ -1314,39 +998,217 @@ class AnalysisTrajectories(object):
                     xls_ids[id].append(xl)
                 else:
                     xls_ids[id] = [xl]
-        
         return xls_ids
 
-    def plot_XLs_distances(self, cluster = 0, file_out = 'plot_XLs_distance_distributions.pdf'):
-        dist_columns = [x for x in self.all_XLs_dist_clusters.columns.values if 'Distance_' in x]
-        dXLs_cluster = self.all_XLs_dist_clusters.loc[self.all_XLs_dist_clusters['cluster'] == cluster, dist_columns]
+    def get_Psi_stats(self, atomic_XLs = False):
+        '''
+        Organize Psi values into DataFrame
+        Get mean value for extracting models 
+        (Does not work for atomic XLs restraint)
+        '''
+        if atomic_XLs:
+            DF_XLs_psi  =  self.DF_atomic_XLs_psi
+        else:
+            DF_XLs_psi  =  self.DF_XLs_psi
+
         
+        for k,v in self.XLs_nuis.items():
+            DF_XLs_psi = DF_XLs_psi.append(pd.Series([k]+v, index = DF_XLs_psi.columns.values), ignore_index=True) 
+
+        DF_XLs_psi.to_csv(self.analysis_dir+'XLs_all_Psi.csv')
+
+        psi_cols =  DF_XLs_psi.columns.values[1:]
+        psi_vals = DF_XLs_psi[psi_cols]
+        if self.Multiple_XLs_restraints or self.Multiple_psi_values:
+            self.psi_mean = psi_vals.mean()
+        else:
+            self.psi_mean = psi_vals.mean().mean()
+           
+        print('The average XLs Psi parameter is: ', self.psi_mean)
+
+    def analyze_trajectory_XLs(self, S_tot_scores, S_dist, atomic_XLs, traj_number, ts_max):
+
+        sel_nuis = [v for v in S_dist.columns.values if 'Psi' in v]
+                
+        # Get XLS satisfaction, append to S_dist
+        XLs_satif_fields = []
+        if self.Multiple_XLs_restraints:
+            for type_XLs in self.XLs_cutoffs.keys():
+                XLs_satif = self.get_XLs_satisfaction(S_dist, atomic_XLs, type_XLs = type_XLs)
+                temp_name = 'XLs_satif_'+type_XLs.rstrip()
+                S_tot_scores = S_tot_scores.assign(XLs_satif=pd.Series(XLs_satif))
+                S_tot_scores.rename(columns={'XLs_satif':temp_name}, inplace=True)
+                XLs_satif_fields.append(temp_name)
+        elif self.Multiple_psi_values:
+            all_psis = [v.split(self.psi_head)[1] for v in  self.DF_XLs_psi.columns.values[1:] if 'std' not in v]
+            for type_psi in all_psis:
+                XLs_satif = self.get_XLs_satisfaction(S_dist, atomic_XLs, type_psi = type_psi)
+                temp_name = 'XLs_satif_'+type_psi
+                S_tot_scores = S_tot_scores.assign(XLs_satif=pd.Series(XLs_satif))
+                S_tot_scores.rename(columns={'XLs_satif':temp_name}, inplace=True)
+                XLs_satif_fields.append(temp_name)
+        else:
+            XLs_satif = self.get_XLs_satisfaction(S_dist, atomic_XLs)
+            S_tot_scores = S_tot_scores.assign(XLs_satif=pd.Series(XLs_satif))
+            XLs_satif_fields.append('XLs_satif')
+            
+        file_out_xls = 'plot_XLs_%s.pdf'%(traj_number)
+        self.plot_XLs_satisfaction(S_tot_scores['MC_frame'].values, S_tot_scores[XLs_satif_fields], S_dist[sel_nuis], ts_max, file_out_xls)
+        
+        # Add percent of satisfied XLs to DF
+        if self.XLs_restraint_nuisances:
+            nuis_mean = []
+            nuis_std = []
+            nuis_fields = sorted([n for n in S_dist.columns.values if 'Psi' in n])
+            for nuis in sorted(nuis_fields):
+                # Create df instead of dic
+                nuis_mean.append(np.mean(S_dist[nuis].loc[ts_max:]))
+                nuis_std.append(np.std(S_dist[nuis].loc[ts_max:]))
+            self.XLs_nuis[traj_number] = list(nuis_mean) + list(nuis_std)
+
+        return S_tot_scores, S_dist
+
+    def get_XLs_satisfaction(self, S_dist, atomic_XLs, type_XLs = None, type_psi = None):
+        if type_XLs and not type_psi:
+            dist_columns = [x for x in S_dist.columns.values if ('Distance_' in x and type_XLs in x)]
+            cutoff = self.XLs_cutoffs[type_XLs]
+        elif type_psi and not type_XLs:
+            dist_columns = [x for x in S_dist.columns.values if ('Distance_' in x and type_psi in x)]
+            cutoff = list(self.XLs_cutoffs.values())[0]
+        elif type_XLs and type_psi:
+            dist_columns = [x for x in S_dist.columns.values if ('Distance_' in x and type_XLs in x and type_psi in x)]
+            cutoff = self.XLs_cutoffs[type_XLs]
+        elif atomic_XLs:
+            dist_columns = [x for x in S_dist.columns.values if ('BestDist' in x)]
+            cutoff = list(self.XLs_cutoffs.values())[0]
+        else:
+            dist_columns = [x for x in S_dist.columns.values if 'Distance_' in x]
+            cutoff = list(self.XLs_cutoffs.values())[0]
+
+        # Only distance columns
+        XLs_dists = S_dist[dist_columns]
+        
+        # Check for ambiguity
+        if self.ambiguous_XLs_restraint == True:
+            min_XLs = pd.DataFrame()
+            for k, v in self.ambiguous_XLs_dict.items():
+                min_XLs[k] = XLs_dists[v].min(axis=1)
+            perc_per_step = list(min_XLs.apply(lambda x: sum(x<=cutoff)/len(x), axis=1))
+            
+        else:
+            perc_per_step = list( XLs_dists.apply(lambda x: sum(x<=cutoff)/len(x), axis=1))
+            
+        return perc_per_step
+
+    def summarize_XLs_info(self):
+        unique_clusters = np.sort(list(set(self.S_comb_dist['cluster'])))
+        print('unique_clusters', unique_clusters)
+        for cl in unique_clusters[1:]:
+            # Boxplot XLs distances
+            self.boxplot_XLs_distances(cluster = cl, file_out = 'plot_XLs_distances_cl'+str(cl)+'.pdf')
+            # XLs satisfaction data
+            self.get_XLs_details(cluster = cl)
+        # XLs satisfaction data for all models
+        self.get_XLs_details(cluster = 'All')
+    
+    def get_XLs_details(self, cluster=0,  XLs_type = None):
+        '''
+        For GSM, determine for each XLs how often it is satisfied.
+        '''
+
+        if XLs_type:
+            dist_columns = [v for v in self.S_comb_dist.columns.values if 'Distance' in v and XLs_type in v]
+            cutoff = [v for k,v in self.XLs_cutoffs.items() if XLs_type in k][0]
+        else:
+            dist_columns = [v for v in self.S_comb_dist.columns.values if 'Distance' in v]
+            cutoff = list(self.XLs_cutoffs.values())[0]
+
+        if cluster != 'All':
+            dXLs_cluster = self.S_comb_dist.loc[self.S_comb_dist['cluster'] == cluster, dist_columns]
+        else:
+            dXLs_cluster = self.S_comb_dist.loc[:, dist_columns]
+            
+        stats_XLs = pd.DataFrame()
+        stats_XLs['mean'] = dXLs_cluster.mean()
+        stats_XLs['std'] = dXLs_cluster.mean()
+        stats_XLs['min'] = dXLs_cluster.mean()
+        stats_XLs['max'] = dXLs_cluster.mean()
+        stats_XLs['perc_satif'] = dXLs_cluster.apply(lambda x: float(len(x[x<cutoff]))/float(len(x)), axis = 0)
+
+        if XLs_type:
+            stats_XLs.to_csv(self.analysis_dir+'XLs_satisfaction_'+XLs_type+'_cl'+str(cluster)+'.csv')
+            dXLs_cluster.to_csv(self.analysis_dir+'XLs_distances_'+XLs_type+'_cl'+str(cluster)+'.csv')
+        else:
+            stats_XLs.to_csv(self.analysis_dir+'XLs_satisfaction_cl'+str(cluster)+'.csv')
+            dXLs_cluster.to_csv(self.analysis_dir+'XLs_distances_cl'+str(cluster)+'.csv')
+         
+    def plot_XLs_satisfaction(self, t, perc_per_step, nuis_vals, ts_max, file_out):
+        
+        c = ['gold', 'orange', 'red', 'blue', 'green']
+        n_bins = 20
+        
+        fig, ax = pl.subplots(figsize=(10.0, 4.0), nrows=1, ncols=3)
+        axes = ax.flatten()
+        for i, c in enumerate(perc_per_step.columns.values):
+            label = c
+            axes[0].plot(t[::10], perc_per_step[c].loc[::10], label=label)
+        axes[0].set_title('XLs restraint satisfaction', fontsize=14)
+        axes[0].set_xlabel('Step',fontsize=12)
+        axes[0].set_ylabel('Percent Satisfied',fontsize=12)
+        handles, labels = ax[0].get_legend_handles_labels()
+        ax[0].legend(handles[::-1], labels[::-1])
+
+        for i, c in enumerate(nuis_vals.columns.values):
+            label = c.split('CrossLinkingMassSpectrometryRestraint_')[-1]
+            axes[1].plot(t[::100], nuis_vals[c].loc[::100], label=label)
+        axes[1].set_title('Psi nuisance parameters', fontsize=14)
+        axes[1].set_xlabel('Step',fontsize=12)
+        axes[1].set_ylabel('Psi',fontsize=12)
+        handles, labels = ax[1].get_legend_handles_labels()
+        ax[1].legend(handles[::-1], labels[::-1])
+
+        for i,c in enumerate(nuis_vals.columns.values):
+            label = c.split('CrossLinkingMassSpectrometryRestraint_')[-1]
+            axes[2].hist(nuis_vals[c].loc[ts_max:],n_bins, histtype='step',fill=False, label=label)
+            
+        axes[2].set_title('Psi nuisance parameters', fontsize=14)
+        axes[2].set_xlabel('Psi',fontsize=12)
+        axes[2].set_ylabel('Density',fontsize=12)
+        handles, labels = ax[1].get_legend_handles_labels()
+        ax[2].legend(handles[::-1], labels[::-1])
+        
+        pl.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.5)
+        fig.savefig(self.analysis_dir+file_out)
+
+    def boxplot_XLs_distances(self,cluster = 0,  file_out = 'plot_XLs_distance_distributions.pdf'):
+        
+        dist_columns = [x for x in self.S_comb_dist.columns.values if 'Distance_' in x]
+        dXLs_cluster = self.S_comb_dist.loc[self.S_comb_dist['cluster'] == cluster, dist_columns]
+    
         dXLs_unique = pd.DataFrame()
-        if self.ambiguos_XLs_restraint == True:
-            ambiguous_XLs_dict = self.check_XLs_ambiguity(dXLs_cluster, 35.0)
-            for k, v in ambiguous_XLs_dict.items():
+        if self.ambiguous_XLs_restraint == True:
+            for k, v in self.ambiguous_XLs_dict.items():
                 XLs_sele = dXLs_cluster.loc[:,v].mean()
                 XLs_min = XLs_sele.idxmin()
                 dXLs_unique[XLs_min] =  dXLs_cluster[XLs_min]
         else:
             dXLs_unique = dXLs_cluster    
     
-        # Get distances and order based on mean
+        # Get distances and order based on the mean
         columns = ['entry', 'mean', 'id']
         XLs_ids = pd.DataFrame(columns = columns)
         for i, v in enumerate(dXLs_unique.columns.values):
-            if 'Distance' in v:
-                m = np.mean(dXLs_unique[v])
-                ll = v.split('||')[1]
-                label = '|'.join(ll.split('|')[1:5]) 
-                XLs_ids = XLs_ids.append(pd.Series([int(i),m,label], index=columns), ignore_index=True)
+            m = np.mean(dXLs_unique[v])
+            ll = v.split('||')[1]
+            label = '|'.join(ll.split('|')[1:5]) 
+            XLs_ids = XLs_ids.append(pd.Series([int(i),m,label], index=columns), ignore_index=True)
         XLs_ids = XLs_ids.sort_values(by=['mean'])
         labels_ordered = XLs_ids['id'].values
 
         S_sorted = np.array(dXLs_unique)[:, XLs_ids['entry'].values.astype('int')]
         n_xls = len(labels_ordered)
-        n_plots = math.ceil(n_xls/40.0)
-        n_frac = math.ceil(n_xls/float(n_plots))
+        n_plots = int(math.ceil(n_xls/40.0))
+        n_frac = int(math.ceil(n_xls/float(n_plots)))
     
         # Generate plot
         fig, ax = pl.subplots(figsize=(12, 6.0*n_plots), nrows=n_plots, ncols=1)
@@ -1371,11 +1233,7 @@ class AnalysisTrajectories(object):
     def plot_pEMAP_distances(self, pEMAP_satif, file_out):
         n_bins = 20
         fig, ax = pl.subplots(figsize=(4.0, 4.0), nrows=1, ncols=1)
-        #axes[0].scatter(np.mean(S_dist[:,1:],axis=0), d_pEMAP, color='orangered',alpha=0.9)
-        #xes[0].set_title('Dist pE-MAP', fontsize=14)
-        #axes[0].set_xlabel('Dist. struct. (A)',fontsize=12)
-        #axes[0].set_ylabel('Dist. model (A)',fontsize=12)
-        
+    
         ax.plot(pEMAP_satif[::10,0], pEMAP_satif[::10,1], color='orangered',alpha=0.8)
         ax.set_title('pE-MAP restraint', fontsize=14)
         ax.set_xlabel('Step',fontsize=12)

@@ -48,10 +48,9 @@ AT.get_restraint_fields()
 AT.read_stat_files()
 AT.write_models_info()
 AT.get_Psi_stats()
-AT.get_XLs_details()
 
-AT.do_hdbscan_clustering(['EV_sum', 'XLs_sum'])
-
+AT.hdbscan_clustering(['EV_sum', 'XLs_sum'])
+AT.summarize_XLs_info()
 exit()
 
 
