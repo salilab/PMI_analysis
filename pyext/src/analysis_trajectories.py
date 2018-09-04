@@ -674,14 +674,26 @@ class AnalysisTrajectories(object):
             kk = k.split(self.dir_name)[-1].split('/')[0]
             T.to_csv(self.analysis_dir+'all_info_'+str(kk)+'.csv')
 
-    def read_models_info(self):
+    def read_models_info(self, XLs_cutoffs= None):
         ''' Read info of all models after equilibration'''
-        
+        if XLs_cutoffs:
+            self.XLs_cutoffs = XLs_cutoffs        
+
         info_files = glob.glob(self.analysis_dir+'all_info_*.csv')
         for f in info_files:
             k = f.split('all_info_')[-1].split('.csv')[0]
             df = pd.read_csv(f)
             self.S_all[k] = df
+        
+        xls_all_file = glob.glob(self.analysis_dir+'XLs_info_all.csv')
+        if len(xls_all_file)>0:
+            self.S_comb_dist = pd.read_csv(xls_all_file[0])
+            self.ambiguous_XLs_restraint = True
+            XLs_names = self.S_comb_dist.columns.values
+            self.ambiguous_XLs_dict =  self.check_XLs_ambiguity(XLs_names)
+        else:
+            print('No files with XLs info found')
+            
        
     def hdbscan_clustering(self,
                            selected_scores,
@@ -712,7 +724,9 @@ class AnalysisTrajectories(object):
             all_dist_dfs = [self.S_dist_all[dd] for dd in np.sort(self.S_dist_all.keys())]
             S_comb_dist = pd.concat(all_dist_dfs).iloc[::skip]
             self.S_comb_dist = S_comb_dist.assign(cluster = pd.Series(hdbsc.labels_, index=S_comb_dist.index).values)
+            self.S_comb_dist.to_csv(self.analysis_dir+'/XLs_info_all.csv', index=False)
             
+ 
         print('Number of unique clusters: ', len(np.unique(hdbsc.labels_)))
         
         # Write and plot info from clustering
@@ -817,7 +831,7 @@ class AnalysisTrajectories(object):
         cluster_colors = [palette[col] for col in S_comb_sel['cluster']]
 
         n_sel = len(selected_scores)
-        fig = pl.figure(figsize=(8,8))
+        fig = pl.figure(figsize=(2*n_sel,2*n_sel))
         gs = gridspec.GridSpec(n_sel, n_sel)
         i = 0
         for s1, s2 in itertools.product(selected_scores, repeat=2):
@@ -939,7 +953,6 @@ class AnalysisTrajectories(object):
        
         M = np.arange(int(min(len(scores_A),len(scores_B))/20.), min(len(scores_A),len(scores_B)),int(nn/20.))
         if len(M)<=10.0:
-            print(len(scores_A), len(scores_B))
             M = np.arange(int(min(len(scores_A),len(scores_B))/10.), min(len(scores_A),len(scores_B)),int(min(len(scores_A),len(scores_B))/10.))
     
         RH1 = []
@@ -986,18 +999,35 @@ class AnalysisTrajectories(object):
         Output: Dictionary of XLs that should be treated as ambiguous
         '''
         xls_ids = {}
-        for i, xl in enumerate(all_keys):
-            if 'Distance_' in xl:
-                vals = xl.split('|')
-                id = vals[2].split('.')[0]
-                p1 = vals[3].split('.')[0]
-                r1 = vals[4]
-                p2 = vals[5].split('.')[0]
-                r2 = vals[6]
-                if id in xls_ids.keys():
-                    xls_ids[id].append(xl)
-                else:
-                    xls_ids[id] = [xl]
+
+        if self.Multiple_XLs_restraints:
+            for type_XLs in self.XLs_cutoffs.keys():
+                xls_ids[type_XLs] = {}
+                for i, xl in enumerate(all_keys):
+                    if ('Distance_' in xl) and (type_XLs in xl):
+                        vals = xl.split('|')
+                        id = vals[2].split('.')[0]
+                        p1 = vals[3].split('.')[0]
+                        r1 = vals[4]
+                        p2 = vals[5].split('.')[0]
+                        r2 = vals[6]
+                        if id in xls_ids[type_XLs].keys():
+                            xls_ids[type_XLs][id].append(xl)
+                        else:
+                            xls_ids[type_XLs][id] = [xl]
+        else:        
+            for i, xl in enumerate(all_keys):
+                if ('Distance_' in xl):
+                    vals = xl.split('|')
+                    id = vals[2].split('.')[0]
+                    p1 = vals[3].split('.')[0]
+                    r1 = vals[4]
+                    p2 = vals[5].split('.')[0]
+                    r2 = vals[6]
+                    if id in xls_ids.keys():
+                        xls_ids[id].append(xl)
+                    else:
+                        xls_ids[id] = [xl]
         return xls_ids
 
     def get_Psi_stats(self, atomic_XLs = False):
@@ -1051,7 +1081,7 @@ class AnalysisTrajectories(object):
             XLs_satif = self.get_XLs_satisfaction(S_dist, atomic_XLs)
             S_tot_scores = S_tot_scores.assign(XLs_satif=pd.Series(XLs_satif))
             XLs_satif_fields.append('XLs_satif')
-            
+
         file_out_xls = 'plot_XLs_%s.pdf'%(traj_number)
         self.plot_XLs_satisfaction(S_tot_scores['MC_frame'].values, S_tot_scores[XLs_satif_fields], S_dist[sel_nuis], ts_max, file_out_xls)
         
@@ -1061,7 +1091,7 @@ class AnalysisTrajectories(object):
             nuis_std = []
             nuis_fields = sorted([n for n in S_dist.columns.values if 'Psi' in n])
             for nuis in sorted(nuis_fields):
-                # Create df instead of dic
+                # Create df instead of dict
                 nuis_mean.append(np.mean(S_dist[nuis].loc[ts_max:]))
                 nuis_std.append(np.std(S_dist[nuis].loc[ts_max:]))
             self.XLs_nuis[traj_number] = list(nuis_mean) + list(nuis_std)
@@ -1069,6 +1099,7 @@ class AnalysisTrajectories(object):
         return S_tot_scores, S_dist
 
     def get_XLs_satisfaction(self, S_dist, atomic_XLs, type_XLs = None, type_psi = None):
+        
         if type_XLs and not type_psi:
             dist_columns = [x for x in S_dist.columns.values if ('Distance_' in x and type_XLs in x)]
             cutoff = self.XLs_cutoffs[type_XLs]
@@ -1087,38 +1118,53 @@ class AnalysisTrajectories(object):
 
         # Only distance columns
         XLs_dists = S_dist[dist_columns]
-        
+
         # Check for ambiguity
         if self.ambiguous_XLs_restraint == True:
             min_XLs = pd.DataFrame()
-            for k, v in self.ambiguous_XLs_dict.items():
-                min_XLs[k] = XLs_dists[v].min(axis=1)
+            if self.Multiple_XLs_restraints:
+                for k, v in self.ambiguous_XLs_dict[type_XLs].items():
+                    min_XLs[k] = XLs_dists[v].min(axis=1)
+            else:
+                 for k, v in self.ambiguous_XLs_dict.items():
+                     min_XLs[k] = XLs_dists[v].min(axis=1)   
             perc_per_step = list(min_XLs.apply(lambda x: sum(x<=cutoff)/len(x), axis=1))
             
         else:
             perc_per_step = list( XLs_dists.apply(lambda x: sum(x<=cutoff)/len(x), axis=1))
-            
+
         return perc_per_step
 
     def summarize_XLs_info(self):
         unique_clusters = np.sort(list(set(self.S_comb_dist['cluster'])))
         print('unique_clusters', unique_clusters)
-        for cl in unique_clusters[1:]:
-            # Boxplot XLs distances
-            self.boxplot_XLs_distances(cluster = cl, file_out = 'plot_XLs_distances_cl'+str(cl)+'.pdf')
-            # XLs satisfaction data
-            self.get_XLs_details(cluster = cl)
+        if self.Multiple_XLs_restraints:
+            for type_XLs in self.XLs_cutoffs.keys():
+                cutoff = self.XLs_cutoffs[type_XLs]
+                for cl in unique_clusters[1:]:
+                    # Boxplot XLs distances
+                    self.boxplot_XLs_distances(cluster = cl, type_XLs = type_XLs, cutoff = cutoff, file_out = 'plot_XLs_distances_cl'+str(cl)+'_'+type_XLs+'.pdf')
+                    # XLs satisfaction data
+                    self.get_XLs_details(cluster = cl, type_XLs = type_XLs)
+        else:
+            cutoff = self.XLs_cutoffs.values()[0]
+            for cl in unique_clusters[1:]:
+                # Boxplot XLs distances
+                self.boxplot_XLs_distances(cluster = cl, cutoff = cutoff, file_out = 'plot_XLs_distances_cl'+str(cl)+'.pdf')
+                # XLs satisfaction data
+                self.get_XLs_details(cluster = cl)
+                
         # XLs satisfaction data for all models
         self.get_XLs_details(cluster = 'All')
     
-    def get_XLs_details(self, cluster=0,  XLs_type = None):
+    def get_XLs_details(self, cluster=0, type_XLs = None):
         '''
         For GSM, determine for each XLs how often it is satisfied.
         '''
 
-        if XLs_type:
-            dist_columns = [v for v in self.S_comb_dist.columns.values if 'Distance' in v and XLs_type in v]
-            cutoff = [v for k,v in self.XLs_cutoffs.items() if XLs_type in k][0]
+        if type_XLs:
+            dist_columns = [v for v in self.S_comb_dist.columns.values if 'Distance' in v and type_XLs in v]
+            cutoff = [v for k,v in self.XLs_cutoffs.items() if type_XLs in k][0]
         else:
             dist_columns = [v for v in self.S_comb_dist.columns.values if 'Distance' in v]
             cutoff = list(self.XLs_cutoffs.values())[0]
@@ -1135,9 +1181,9 @@ class AnalysisTrajectories(object):
         stats_XLs['max'] = dXLs_cluster.max()
         stats_XLs['perc_satif'] = dXLs_cluster.apply(lambda x: float(len(x[x<cutoff]))/float(len(x)), axis = 0)
 
-        if XLs_type:
-            stats_XLs.to_csv(self.analysis_dir+'XLs_satisfaction_'+XLs_type+'_cluster_'+str(cluster)+'.csv')
-            dXLs_cluster.to_csv(self.analysis_dir+'XLs_distances_'+XLs_type+'_cluster_'+str(cluster)+'.csv')
+        if type_XLs:
+            stats_XLs.to_csv(self.analysis_dir+'XLs_satisfaction_'+type_XLs+'_cluster_'+str(cluster)+'.csv')
+            dXLs_cluster.to_csv(self.analysis_dir+'XLs_distances_'+type_XLs+'_cluster_'+str(cluster)+'.csv')
         else:
             stats_XLs.to_csv(self.analysis_dir+'XLs_satisfaction_cluster_'+str(cluster)+'.csv')
             dXLs_cluster.to_csv(self.analysis_dir+'XLs_distances_cluster_'+str(cluster)+'.csv')
@@ -1180,17 +1226,26 @@ class AnalysisTrajectories(object):
         pl.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.5)
         fig.savefig(self.analysis_dir+file_out)
 
-    def boxplot_XLs_distances(self,cluster = 0,  file_out = 'plot_XLs_distance_distributions.pdf'):
-        
-        dist_columns = [x for x in self.S_comb_dist.columns.values if 'Distance_' in x]
+    def boxplot_XLs_distances(self, cluster = 0, type_XLs = None, cutoff = 30.0, file_out = 'plot_XLs_distance_distributions.pdf'):
+
+        if type_XLs:
+            dist_columns = [x for x in self.S_comb_dist.columns.values if ('Distance_' in x) and (type_XLs in x)]
+        else:
+            dist_columns = [x for x in self.S_comb_dist.columns.values if 'Distance_' in x]
         dXLs_cluster = self.S_comb_dist.loc[self.S_comb_dist['cluster'] == cluster, dist_columns]
     
         dXLs_unique = pd.DataFrame()
         if self.ambiguous_XLs_restraint == True:
-            for k, v in self.ambiguous_XLs_dict.items():
-                XLs_sele = dXLs_cluster.loc[:,v].mean()
-                XLs_min = XLs_sele.idxmin()
-                dXLs_unique[XLs_min] =  dXLs_cluster[XLs_min]
+            if type_XLs:
+                for k, v in self.ambiguous_XLs_dict[type_XLs].items():
+                    XLs_sele = dXLs_cluster.loc[:,v].mean()
+                    XLs_min = XLs_sele.idxmin()
+                    dXLs_unique[XLs_min] =  dXLs_cluster[XLs_min]
+            else:
+                for k, v in self.ambiguous_XLs_dict.items():
+                    XLs_sele = dXLs_cluster.loc[:,v].mean()
+                    XLs_min = XLs_sele.idxmin()
+                    dXLs_unique[XLs_min] =  dXLs_cluster[XLs_min]
         else:
             dXLs_unique = dXLs_cluster    
     
@@ -1199,29 +1254,32 @@ class AnalysisTrajectories(object):
         XLs_ids = pd.DataFrame(columns = columns)
         for i, v in enumerate(dXLs_unique.columns.values):
             m = np.mean(dXLs_unique[v])
-            ll = v.split('||')[1]
-            label = '|'.join(ll.split('|')[1:5]) 
+            ll = v.split('_|')[1]
+            label = '|'.join(ll.split('|')[2:6])
             XLs_ids = XLs_ids.append(pd.Series([int(i),m,label], index=columns), ignore_index=True)
         XLs_ids = XLs_ids.sort_values(by=['mean'])
         labels_ordered = XLs_ids['id'].values
 
+        # For plot layout
         S_sorted = np.array(dXLs_unique)[:, XLs_ids['entry'].values.astype('int')]
         n_xls = len(labels_ordered)
-        n_plots = int(math.ceil(n_xls/40.0))
+        n_plots = int(math.ceil(n_xls/50.0))
         n_frac = int(math.ceil(n_xls/float(n_plots)))
-    
+
         # Generate plot
         fig, ax = pl.subplots(figsize=(12, 6.0*n_plots), nrows=n_plots, ncols=1)
+        if n_plots == 1: ax = [ax] 
         for i in range(n_plots):
             if i == n_plots-1:
                 bb1 = ax[i].boxplot(S_sorted[:,(i*n_frac):-1],patch_artist=True, showfliers=False)
                 ax[i].set_xticklabels(labels_ordered[(i*n_frac):-1],rotation='vertical',fontsize=10)
-                ax[i].set_ylim([0,np.max(S_sorted[:,-1])+20.0])
+                max_y = np.max(S_sorted[:, -1]) + 25
+                ax[i].set_ylim([0, (max_y - (max_y % 25))])
             else:
                 bb1 = ax[i].boxplot(S_sorted[:,(i*n_frac):((i+1)*n_frac)],patch_artist=True, showfliers=False)
                 ax[i].set_xticklabels(labels_ordered[(i*n_frac):((i+1)*n_frac)],rotation='vertical',fontsize=10)
                 ax[i].set_ylim([0,np.max(S_sorted[:,(i+1)*n_frac])+20.0])
-            ax[i].axhline(y=35.0,color='green',linestyle='-')
+            ax[i].axhline(y=cutoff, color='forestgreen', linestyle='-', linewidth=1.5)
             ax[i].set_xticks(range(1,n_frac+1))
             
             ax[i].set_ylabel('XLs distances (A)')
