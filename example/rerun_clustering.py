@@ -23,7 +23,7 @@ out_dirs = glob.glob(top_dir+'/'+dir_head+'*/output/')
 # Re-run clustering with new 
 # restraint and/or parameters
 ################################
-
+XLs_cutoffs = {'DSSO':30.0}
 
 # Load module
 AT = AnalysisTrajectories(out_dirs,
@@ -31,13 +31,13 @@ AT = AnalysisTrajectories(out_dirs,
                           analysis_dir = analys_dir,
                           nproc=nproc)
 
-AT.read_models_info()
+AT.read_models_info(XLs_cutoffs)
 
-AT.do_hdbscan_clustering(['EV_sum', 'XLs_sum', 'Psi_vals_0.01', 'Psi_vals_0.1'],
+AT.hdbscan_clustering(['EV_sum', 'XLs_sum', 'Psi_vals_0.01', 'Psi_vals_0.1'],
                          min_cluster_size=500,
                          min_samples=1,
                          skip=2)
-
+AT.summarize_XLs_info()
 exit()
 
 

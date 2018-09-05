@@ -29,7 +29,24 @@ AT.set_analyze_Connectivity_restraint()
 AT.set_analyze_Excluded_volume_restraint()
 ```
 
-3. Identify where each of the restraints scores and other relevant information is stored in the stat files
+If you set up more than one XLs restraint, you should include the *Multiple_XLs_restraints = True* flag in the analysus and include a cutoff for all of them in the *XLs_cutoffs* dictionary. For example, if you divided the DSSO XLs into a intra-subunit and inter-subunit datasets, there should be two elements in the *XLs_cutoffs* dictionary (even if they have the same cutoff):
+
+```
+XLs_cutoffs = {'DSSO_Inter':30.0, 'DSSO_Intra':30.0}
+AT.set_analyze_XLs_restraint(XLs_cutoffs = XLs_cutoffs,
+                             Multiple_XLs_restraints = True)
+```
+Using the labels you used to setup the restraint and keys.
+
+Similarly, if there is ambiguity in the XLs assignments (i.e. you have multiple copies of the same protein), you should use the *ambiguous_XLs_restraint = True* option:
+
+```
+AT.set_analyze_XLs_restraint(XLs_cutoffs = XLs_cutoffs,
+                             ambiguous_XLs_restraint = True)
+
+```
+
+3. Identify where each of the restraints scores and other relevant information is stored in the stat files:
 
 ```
 AT.get_restraint_fields()
@@ -63,15 +80,14 @@ AT.do_hdbscan_clustering(['EV_sum', 'XLs_sum', 'Psi_vals_0.01', 'Psi_vals_0.1'])
 
 7. Get information about XLs satisfaction:
 ```
-AT.get_XLs_details()
+AT.summarize_XLs_info()
 
 ```
-
-Files all_info_*.csv contain the information about all models after equilibration. These files can be used to re-run the clustering step:
+This will create a series of files and plots summarizing the XLs distances and satisfaction in all the clusters obtained in step 6. Files all_info_*.csv contain the information about all models after equilibration. These files can be used to re-run the clustering step:
 
 ```
 AT.read_models_info()
-AT.do_hdbscan_clustering(['EV_sum', 'XLs_sum'])
+AT.hdbscan_clustering(['EV_sum', 'XLs_sum'])
 ```
 
 After clustering a series of files are written with the information of frames in each cluster.
@@ -79,15 +95,17 @@ After clustering a series of files are written with the information of frames in
 8. To re-rerun the clustering step without having to read all the stat files again, you can read the relevant information from the `all_info_*.csv` files:
 
 ```
+XLs_cutoffs = {'DSSO_Inter':30.0, 'DSSO_Intra':30.0}
 AT = AnalysisTrajectories(out_dirs,
                           analysis_dir = analys_dir,
                           nproc=nproc)
 			 
-AT.read_models_info()
-AT.do_hdbscan_clustering(['EV_sum', 'XLs_sum'],
+AT.read_models_info(XLs_cutoffs)
+AT.hdbscan_clustering(['EV_sum', 'XLs_sum'],
                         min_cluster_size=200,
                         min_samples=5,
                         skip=5)
+AT.summarize_XLs_info()
 			
 ```
 
