@@ -41,13 +41,14 @@ class AnalysisTrajectories(object):
         self.analysis_dir = analysis_dir
         self.nproc = nproc
         self.restraint_names = {}
-        self.all_fields = []
+        self.all_score_fields = []
 
         self.th = 50
         
         # For multiprocessing
         self.manager = mp.Manager()
         self.S_all = self.manager.dict()
+        self.S_info_all = self.manager.dict()
         self.S_files = self.manager.dict()
         self.S_dist_all = self.manager.dict()
         self.XLs_nuis = self.manager.dict()
@@ -89,10 +90,8 @@ class AnalysisTrajectories(object):
         self.sum_DOPE_restraint = True
         self.sum_MembraneExclusion_restraint = True
         self.sum_MembraneSurfaceLocation_restraint = True
+        self.sum_EM_restraint = False
         
-        self.select_XLs_satisfaction =  False
-        self.select_EM_score = False
-        self.select_Total_score = False
         self.Multiple_psi_values = False
 
         # Separate trajectories into two halves
@@ -178,7 +177,8 @@ class AnalysisTrajectories(object):
         Gather information to retrieve from
         stat file for each trajectory
         '''
-    
+        self.all_info = {}
+        
         # Get the field number for fframe and total score
         self.rmf_file_field = self.get_field_id(self.stat2_dict, 'rmf_file')
         rmf_frame_index = self.get_field_id(self.stat2_dict, 'rmf_frame_index')
@@ -186,7 +186,7 @@ class AnalysisTrajectories(object):
         Total_score = self.get_field_id(self.stat2_dict, 'Total_Score')
     
         # Restraint names
-        self.all_fields = fframe+rmf_frame_index+Total_score
+        self.all_score_fields = fframe+rmf_frame_index+Total_score
         self.restraint_names[0] = 'MC_frame'
         self.restraint_names[1] = 'rmf_frame_index'
         self.restraint_names[2] = 'Total_score'
@@ -197,33 +197,34 @@ class AnalysisTrajectories(object):
         
         # All possible restraints
         if self.Excluded_volume_restraint:
-            self.get_fields('ExcludedVolumeSphere', 'EV')
+            self.get_score_fields('ExcludedVolumeSphere', 'EV')
            
         if self.Connectivity_restraint:
-            self.get_fields('ConnectivityRestraint', 'CR')
+            self.get_score_fields('ConnectivityRestraint', 'CR')
 
         if self.XLs_restraint:
-            self.get_fields('CrossLinkingMassSpectrometryRestraint_Data_Score', 'XLs')
-            self.get_fields('CrossLinkingMassSpectrometryRestraint_PriorPsi_Score', 'XLs_psi')
+            self.get_score_fields('CrossLinkingMassSpectrometryRestraint_Data_Score', 'XLs')
+            self.get_score_fields('CrossLinkingMassSpectrometryRestraint_PriorPsi_Score', 'XLs_psi')
             
             # Other quantities associated to XLs (distances and nuisances)
-            XLs_dist = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('CrossLinkingMassSpectrometryRestraint_Distance_' in self.stat2_dict[k])}
-            self.XLs_info = XLs_dist
+            self.XLs_dist = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('CrossLinkingMassSpectrometryRestraint_Distance_' in self.stat2_dict[k])}
+            #self.XLs_info = XLs_dist
             if self.XLs_restraint_nuisances:
                 XLs_nuis = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('CrossLinkingMassSpectrometryRestraint_Psi_' in self.stat2_dict[k] and 'MonteCarlo_' not in self.stat2_dict[k])}
-                self.psi_head = self.get_str_match(list(XLs_nuis.keys()))
-                for k, v in XLs_nuis.items():
-                    self.restraint_names[self.name_i] = 'Psi_vals_'+k.split('CrossLinkingMassSpectrometryRestraint_Psi_')[-1]
-                    self.name_i += 1
-                self.all_fields += XLs_nuis.values()
+                self.all_info.update(XLs_nuis)
+                #self.psi_head = self.get_str_match(list(XLs_nuis.keys()))
+                #for k, v in XLs_nuis.items():
+                #    self.restraint_names[self.name_i] = 'Psi_vals_'+k.split('CrossLinkingMassSpectrometryRestraint_Psi_')[-1]
+                #    self.name_i += 1
+                #    self.all_fields += [v]
 
                 if len(XLs_nuis.keys())> 1:
                     self.Multiple_psi_values = True
-                self.XLs_info.update(XLs_nuis)
-                mm = sorted(list([v for v in XLs_nuis.keys()]))
-                ss = sorted(list([v+'_std' for v in XLs_nuis.keys()]))
-                self.DF_XLs_psi = pd.DataFrame(columns=['Trajectory']+mm+ss)
-            self.xls_fields = self.XLs_info.values()
+                #XLs_info.update(XLs_nuis)
+                #mm = sorted(list([v for v in XLs_nuis.keys()]))
+                #ss = sorted(list([v+'_std' for v in XLs_nuis.keys()]))
+                #self.DF_XLs_psi = pd.DataFrame(columns=['Trajectory']+mm+ss)
+            #self.xls_fields = self.XLs_info.values()
             
         # Atomic XLs restraint
         if self.atomic_XLs_restraint:
@@ -233,7 +234,7 @@ class AnalysisTrajectories(object):
             Psi_score = self.get_field_id(self.stat2_dict,'AtomicXLRestraint_psi_Score')
             self.restraint_names[name_i] = 'atomic_Psi_score'
             self.name_i += 1
-            self.all_fields += Psi_score
+            self.all_score_fields += Psi_score
             
             # Other quantities associated to XLs (distances and nuisances)
             atomic_XLs_dist = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('AtomicXLRestraint_' in self.stat2_dict[k] and 'BestDist' in self.stat2_dict[k])}
@@ -248,25 +249,30 @@ class AnalysisTrajectories(object):
                 self.DF_atomic_XLs_psi = pd.DataFrame(columns=['Trajectory']+mm+ss)
 
         # XLs info    
-        self.XLs_names = self.XLs_info.keys()
-        self.XLs_fields = [self.XLs_info[k] for k in self.XLs_names]
-        if self.ambiguous_XLs_restraint == True:
-            self.ambiguous_XLs_dict = self.check_XLs_ambiguity(self.XLs_names)
+        if self.XLs_restraint:
+            #self.XLs_names = self.XLs_info.keys()
+            #self.XLs_fields = [self.XLs_info[k] for k in self.XLs_names]
+            if self.ambiguous_XLs_restraint == True:
+                self.ambiguous_XLs_dict = self.check_XLs_ambiguity(self.XLs_dist)
             
         if self.EM_restraint:
-            self.get_fields('GaussianEMRestraint_EM', 'EM3D')
+            self.get_score_fields('GaussianEMRestraint', 'EM3D')
             
         if self.Occams_restraint:
-            self.get_fields('OccamsRestraint_Score', 'OccCon')
+            # Score fields
+            self.get_score_fields('OccamsRestraint_Score', 'OccCon')
+            self.get_score_fields('OccamsRestraint_psi_Score', 'OccCon_psi')
+            self.get_score_fields('OccamsRestraint_sigma_Score', 'OccCon_sigma')
             
-            # Percent of restraints satisfied
-            self.Occams_satif = self.get_field_id(self.stat2_dict, 'OccamsRestraint_satisfied')
-
+            # Percent satisfied and nuisances fields
+            Occams_info = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('OccamsRestraint_' in self.stat2_dict[k] and 'Score' not in self.stat2_dict[k])}
+            self.all_info.update(Occams_info)
+        
         if self.Occams_restraint:
-            self.get_fields('OccamsPositionalRestraint_Score', 'OccPos')
+            self.get_score_fields('OccamsPositionalRestraint_Score', 'OccPos')
             
         if self.pEMAP_restraint:
-            self.get_fields('SimplifiedPEMAP_Score_None', 'pEMAP')
+            self.get_score_fields('SimplifiedPEMAP_Score_None', 'pEMAP')
             
             # Percent of restraints satisfied
             self.pEMAP_satif = self.get_field_id(self.stat2_dict, 'SimplifiedPEMAP_Satisfied')
@@ -281,21 +287,21 @@ class AnalysisTrajectories(object):
                 v_pEMAP.append(val)
 
         if self.Distance_restraint:
-            self.get_fields('DistanceRestraint_Score', 'DR')
+            self.get_score_fields('DistanceRestraint_Score', 'DR')
             
         if self.Binding_restraint:
-            self.get_fields('ResidueBindingRestraint_score', 'BR')
+            self.get_score_fields('ResidueBindingRestraint_score', 'BR')
             
         if self.DOPE_restraint:
-            self.get_fields('DOPE_Restraint_score', 'DOPE')
+            self.get_score_fields('DOPE_Restraint_score', 'DOPE')
             
         if self.MembraneExclusion_restraint:
-            self.get_fields('MembraneExclusionRestraint', 'MEX')
+            self.get_score_fields('MembraneExclusionRestraint', 'MEX')
             
         if self.MembraneSurfaceLocation_restraint:
-            self.get_fields('MembraneSurfaceLocation', 'MSL')
+            self.get_score_fields('MembraneSurfaceLocation', 'MSL')
             
-    def get_fields(self, name_stat_file, short_name):
+    def get_score_fields(self, name_stat_file, short_name):
         '''
         For each restraint, get the stat file field number
         '''
@@ -303,12 +309,12 @@ class AnalysisTrajectories(object):
         if len(RES) == 1:
             self.restraint_names[self.name_i] = short_name+'_sum'
             self.name_i += 1
+            self.all_score_fields += RES.values()
         else:
             for k, v in RES.items():
                 self.restraint_names[self.name_i] = short_name+'_'+k.split(name_stat_file + '_')[-1]
                 self.name_i += 1
-        self.all_fields += RES.values()
-        
+                self.all_score_fields += [v]
             
     def read_DB(self, db_file):
         ''' Read database '''
@@ -371,16 +377,16 @@ class AnalysisTrajectories(object):
         for p in processes:
             p.join()
 
-    def read_stats_detailed(self, traj, stat_files, query_fields, dist_fields, satif_fields, query_rmf_file):
+    def read_stats_detailed(self, traj, stat_files, score_fields, dist_fields, other_fields, query_rmf_file):
         """
         Detailed reading of stats files that includes
         the rmf in which the frame is.
         To be used when using rmf_slice
         """
-        
+    
         S_scores = []
         S_dist = []
-        P_satif = []
+        P_info = []
         #frames_dic = {}
         for file in stat_files:
             line_number=0
@@ -394,14 +400,14 @@ class AnalysisTrajectories(object):
 
                 if line_number > 1:
                     frmf = [d[field] for field in query_rmf_file][0]
-                    s0 = [float(d[field]) for field in self.all_fields]+[traj, frmf]
+                    s0 = [float(d[field]) for field in score_fields]+[traj, frmf]
                     S_scores.append(s0)
-                    if self.XLs_restraint or  self.atomic_XLs_restraint:
-                        d0 = [s0[0]] + [float(d[field]) for field in self.xls_fields]
+                    if self.XLs_restraint or self.atomic_XLs_restraint:
+                        d0 = [s0[0]] + [float(d[field]) for field in dist_fields.values()]
                         S_dist.append(d0)
-                    if satif_fields:
-                        p0 = [s0[0]] + [float(d[field]) for field in satif_fields]
-                        P_satif.append(p0)
+                    if other_fields:
+                        p0 = [s0[0]] + [float(d[field]) for field in other_fields.values()]
+                        P_info.append(p0)
                     
         # Sort based on frame
         S_scores.sort(key=lambda x: float(x[0]))
@@ -438,36 +444,28 @@ class AnalysisTrajectories(object):
         if self.MembraneExclusion_restraint and self.sum_MembraneExclusion_restraint:
             MEX_sum = pd.Series(self.add_restraint_type(DF, 'MEX_'))
             DF = DF.assign(MEX_sum=MEX_sum.values)
-
+            
         if self.MembraneExclusion_restraint and self.sum_MembraneExclusion_restraint:
             MSL_sum = pd.Series(self.add_restraint_type(DF, 'MSL_'))
             DF = DF.assign(MSL_sum=MSL_sum.values)
     
         # Get distance fields
-        if self.XLs_restraint:
+        if dist_fields:
             S_dist = np.array(S_dist)
             S_dist = S_dist[S_dist[:,0].argsort()]
             # Convert in DF
-            column_names_XLs = ['MC_frame'] + list(self.XLs_info.keys())
-            DF_XLs = pd.DataFrame(S_dist, columns = column_names_XLs)
-        if self.atomic_XLs_restraint:
-            S_dist = np.array(S_dist)
-            S_dist = S_dist[S_dist[:,0].argsort()]
-            # Convert in DF
-            column_names_XLs = ['MC_frame'] + list(self.atomic_XLs_info.keys())
-            DF_atomic_XLs = pd.DataFrame(S_dist, columns = column_names_XLs)
-     
-        if satif_fields:  
-            P_satif = np.array(P_satif)
-            P_satif = P_satif[P_satif[:,0].argsort()]
+            DF_dXLs = pd.DataFrame(S_dist, columns = ['MC_frame'] + list(dist_fields.keys()))
+        
+        if other_fields:  
+            P_info = np.array(P_info)
+            P_info = P_info[P_info[:,0].argsort()]
+            DF_info = pd.DataFrame(P_info, columns = ['MC_frame']+list(other_fields.keys()))
 
         #return DF, DF_XLs, P_satif, frames_dic
-        if self.XLs_restraint:
-            return DF, DF_XLs, P_satif
-        elif self.atomic_XLs_restraint:
-            return DF, DF_atomic_XLs, P_satif
-        elif satif_fields:
-            return DF, None, P_satif
+        if dist_fields and other_fields:
+            return DF, DF_dXLs, DF_info
+        elif satif_fields and not other_fields:
+            return DF, None, DF_info
         else:
             return DF, None, None
 
@@ -495,64 +493,22 @@ class AnalysisTrajectories(object):
                 traj = 0
                 traj_number = 0
             stat_files = np.sort(glob.glob(out+'stat.*.out'))
-            #if self.XLs_restraint:
-            #    S_tot_scores, S_dist, P_satif = self.read_stats_detailed(traj,
-            #                                                             stat_files,
-            #                                                             self.all_fields,
-            #                                                             self.XLs_info.values(),
-            #                                                             None,
-            #                                                             self.rmf_file_field)
-                
-                
-            if self.atomic_XLs_restraint and not self.pEMAP_restraint and not self.Occams_restraint:
-                S_tot_scores, S_dist, P_satif = self.read_stats_detailed(traj,
-                                                                         stat_files,
-                                                                         self.all_fields,
-                                                                         self.atomic_XLs_info.values(),
-                                                                         None,
-                                                                         self.rmf_file_field)
-                
-            elif self.pEMAP_restraint and not self.XLs_restraint:
-                S_tot_scores, S_dist, P_satif = self.read_stats_detailed(traj,
-                                                                         stat_files,
-                                                                         self.all_fields,
-                                                                         None,
-                                                                         self.pEMAP_satif,
-                                                                         self.rmf_file_field)
-    
-            elif self.pEMAP_restraint and self.XLs_restraint:
-                S_tot_scores, S_dist, P_satif = self.read_stats_detailed(traj,
-                                                                         stat_files,
-                                                                         self.all_fields,
-                                                                         self.XLs_info.values(),
-                                                                         self.pEMAP_satif,
-                                                                         self.rmf_file_field)
-            elif self.Occams_restraint  and not self.XLs_restraint:
-                S_tot_scores, S_dist, P_satif = self.read_stats_detailed(traj,
-                                                                         stat_files,
-                                                                         self.all_fields,
-                                                                         None,
-                                                                         self.Occams_satif,
-                                                                         self.rmf_file_field)
-    
-            elif self.Occams_restraint and self.XLs_restraint:
-                S_tot_scores, S_dist, P_satif = self.read_stats_detailed(traj,
-                                                                         stat_files,
-                                                                         self.all_fields,
-                                                                         self.XLs_info.values(),
-                                                                         self.Occams_satif,
-                                                                         self.rmf_file_field)
-
             
                 
-            else:
-                S_tot_scores, S_dist, P_satif = self.read_stats_detailed(traj,
+            if self.XLs_restraint:
+                S_tot_scores, S_dist, S_info = self.read_stats_detailed(traj,
                                                                          stat_files,
-                                                                         self.all_fields,
+                                                                         self.all_score_fields,
+                                                                         self.XLs_dist,
+                                                                         self.all_info,
+                                                                         self.rmf_file_field)   
+            else:
+                S_tot_scores, S_dist, S_info = self.read_stats_detailed(traj,
+                                                                         stat_files,
+                                                                         self.all_score_fields,
                                                                          None,
-                                                                         None,
+                                                                         self.all_info,
                                                                          self.rmf_file_field)
-
 
             print('The mean score, min score, and n frames are: ', traj_number,
                   np.mean(S_tot_scores['Total_score'].iloc[self.th:]),
@@ -577,6 +533,8 @@ class AnalysisTrajectories(object):
                 sel_entries += [v for v in S_tot_scores.columns.values if 'atomic_XLs_' in v and 'sum' not in v]
             if self.DOPE_restraint == True and self.sum_DOPE_restraint == False:
                 sel_entries += [v for v in S_tot_scores.columns.values if 'DOPE_' in v and 'sum' not in v]
+            if self.EM_restraint == True and self.sum_EM_restraint == False:
+                sel_entries += [v for v in S_tot_scores.columns.values if 'EM3D_' in v and 'sigma' not in v]
 
             # Also add nuisances parameter
             sel_entries += [v for v in S_tot_scores.columns.values if 'Psi' in v and 'sum' not in v]
@@ -585,7 +543,7 @@ class AnalysisTrajectories(object):
             ts_eq = []
             for r in sel_entries:
                 try:
-                    [t, g, N] = detectEquilibration(np.array(S_tot_scores[r].loc[self.th:]), nskip=5, method='multiscale')
+                    [t, g, N] = detectEquilibration(np.array(S_tot_scores[r].loc[self.th:]), nskip=50, method='geyer' )
                     ts_eq.append(t)
                 except:
                     ts_eq.append(0)
@@ -598,26 +556,26 @@ class AnalysisTrajectories(object):
         
             if self.pEMAP_restraint:
                 file_out_pemap = 'plot_pEMAP_%s.pdf'%(traj_number) 
-                self.plot_pEMAP_distances(P_satif, file_out_pemap)
+                self.plot_pEMAP_distances(S_info, file_out_pemap)
 
             if self.Occams_restraint:
                 file_out_occams = 'plot_Occams_satisfaction_%s.pdf'%(traj_number) 
-                self.plot_Occams_satisfaction(P_satif, file_out_occams)
+                self.plot_Occams_satisfaction(S_info, file_out_occams)
                 
             # Check how many XLs are satisfied
             if self.XLs_restraint:
-                S_tot_scores, S_dist = self.analyze_trajectory_XLs(S_tot_scores,
-                                                                   S_dist,
-                                                                   atomic_XLs = False,
-                                                                   traj_number = traj_number,
-                                                                   ts_max = ts_max)
+                S_info = self.analyze_trajectory_XLs(S_dist,
+                                                     S_info,
+                                                     atomic_XLs = False,
+                                                     traj_number = traj_number,
+                                                     ts_max = ts_max)
                 
             if self.atomic_XLs_restraint:
-                S_tot_scores, S_dist = self.analyze_trajectory_XLs(S_tot_scores,
-                                                                   S_dist,
-                                                                   atomic_XLs = True,
-                                                                   traj_number = traj_number,
-                                                                   ts_max = ts_max)
+                S_info = self.analyze_trajectory_XLs(S_dist,
+                                                     S_info,
+                                                     atomic_XLs = True,
+                                                     traj_number = traj_number,
+                                                     ts_max = ts_max)
                                                                                                  
             # Add half info
             if out in self.dir_halfA:
@@ -627,7 +585,9 @@ class AnalysisTrajectories(object):
             else:
                 S_tot_scores = S_tot_scores.assign(half = pd.Series([0]*len(S_tot_scores), index=S_tot_scores.index).values)
 
+            # Collect distances and nuisances information
             self.S_all[out] = S_tot_scores[ts_max:]
+            self.S_info_all[out] = S_info[ts_max:]
             if self.XLs_restraint:
                 self.S_dist_all[out] = S_dist[ts_max:]
             if self.atomic_XLs_restraint:
@@ -666,7 +626,8 @@ class AnalysisTrajectories(object):
 
         pl.tight_layout(pad=0.5, w_pad=0.1, h_pad=2.0)
         fig.savefig(self.analysis_dir+file_out)
-       
+        pl.close()
+        
     def write_models_info(self):
         ''' Write info of all models after equilibration'''
        
@@ -734,24 +695,24 @@ class AnalysisTrajectories(object):
         self.write_hdbscan_clustering(S_comb_all)
 
         S_comb_sel = S_comb_sel.assign(half = pd.Series(S_comb_all['half'],index=S_comb_sel.index).values)
-        self.write_summary_hdbscan_clustering(S_comb_sel)
+        self.write_summary_hdbscan_clustering(S_comb_all[['Total_score']+selected_scores+['half', 'cluster']])
 
-    def write_summary_hdbscan_clustering(self, S_comb_sel):
+    def write_summary_hdbscan_clustering(self, S_comb_all):
 
         ''' 
         Write clustering summary information 
         (i.e. cluster number, average scores, number of models)
         '''
         
-        clusters = list(set(S_comb_sel['cluster']))
+        clusters = list(set(S_comb_all['cluster']))
         
         out = open(self.analysis_dir+'summary_hdbscan_clustering.dat', 'w')
-        out.write(' '.join(S_comb_sel.columns.values) +' n_models n_A n_B \n')
+        out.write(' '.join(S_comb_all.columns.values) +' n_models n_A n_B \n')
         for cl in clusters:
-            cluster_info = np.array(S_comb_sel[S_comb_sel['cluster']==cl].mean().values).astype('str')
-            n_models = len(S_comb_sel[S_comb_sel['cluster']==cl])
-            n_A = len(S_comb_sel[(S_comb_sel['cluster']==cl) & (S_comb_sel['half']=='A')])
-            n_B = len(S_comb_sel[(S_comb_sel['cluster']==cl) & (S_comb_sel['half']=='B')])
+            cluster_info = np.array(S_comb_all[S_comb_all['cluster']==cl].mean().values).astype('str')
+            n_models = len(S_comb_all[S_comb_all['cluster']==cl])
+            n_A = len(S_comb_all[(S_comb_all['cluster']==cl) & (S_comb_all['half']=='A')])
+            n_B = len(S_comb_all[(S_comb_all['cluster']==cl) & (S_comb_all['half']=='B')])
             out.write(' '.join(cluster_info.astype('str'))+' '+str(n_models)+' '+str(n_A)+' '+str(n_B) +'\n')
             print('Cluster number, number of models: ', cl, n_models)
         out.close()
@@ -1030,35 +991,30 @@ class AnalysisTrajectories(object):
                         xls_ids[id] = [xl]
         return xls_ids
 
-    def get_Psi_stats(self, atomic_XLs = False):
+    def get_Psi_stats(self):
         '''
         Organize Psi values into DataFrame
         Get mean value for extracting models 
         (Does not work for atomic XLs restraint)
         '''
-        if atomic_XLs:
-            DF_XLs_psi  =  self.DF_atomic_XLs_psi
-        else:
-            DF_XLs_psi  =  self.DF_XLs_psi
 
+        key_0 = self.S_info_all.keys()[0]
+        XLs_nuis = [k for k in self.S_info_all[key_0].columns.values if 'CrossLinkingMassSpectrometryRestraint_Psi_' in k]
+        occams_nuis = [k for k in  self.S_info_all[key_0].columns.values if ('OccamsRestraint' in k) and ('psi' in k)] 
+        all_nuis = XLs_nuis + occams_nuis
+        stats_nuis = sum([['mean_'+i, 'std_'+i] for i in all_nuis],[])
+        DF_stat_nuis  = pd.DataFrame(columns = ['traj'] + stats_nuis)
         
-        for k,v in self.XLs_nuis.items():
-            DF_XLs_psi = DF_XLs_psi.append(pd.Series([k]+v, index = DF_XLs_psi.columns.values), ignore_index=True) 
+        for k, v in self.S_info_all.items():
+            sel_nuis_mean = list(v[all_nuis].mean())
+            sel_nuis_std = list(v[all_nuis].std())
+            DF_stat_nuis = DF_stat_nuis.append(pd.Series([k]+sel_nuis_mean+sel_nuis_std, index = DF_stat_nuis.columns.values), ignore_index=True)
 
-        DF_XLs_psi.to_csv(self.analysis_dir+'XLs_all_Psi.csv')
+        DF_stat_nuis.to_csv(self.analysis_dir+'Stat_all_nuisances.csv')
+                                        
+    def analyze_trajectory_XLs(self, S_dist, S_info, atomic_XLs, traj_number, ts_max):
 
-        psi_cols =  DF_XLs_psi.columns.values[1:]
-        psi_vals = DF_XLs_psi[psi_cols]
-        if self.Multiple_XLs_restraints or self.Multiple_psi_values:
-            self.psi_mean = psi_vals.mean()
-        else:
-            self.psi_mean = psi_vals.mean().mean()
-           
-        print('The average XLs Psi parameter is: ', self.psi_mean)
-
-    def analyze_trajectory_XLs(self, S_tot_scores, S_dist, atomic_XLs, traj_number, ts_max):
-
-        sel_nuis = [v for v in S_dist.columns.values if 'Psi' in v]
+        #sel_nuis = [v for v in S_dist.columns.values if 'Psi' in v]
                 
         # Get XLS satisfaction, append to S_dist
         XLs_satif_fields = []
@@ -1066,37 +1022,26 @@ class AnalysisTrajectories(object):
             for type_XLs in self.XLs_cutoffs.keys():
                 XLs_satif = self.get_XLs_satisfaction(S_dist, atomic_XLs, type_XLs = type_XLs)
                 temp_name = 'XLs_satif_'+type_XLs.rstrip()
-                S_tot_scores = S_tot_scores.assign(XLs_satif=pd.Series(XLs_satif))
-                S_tot_scores.rename(columns={'XLs_satif':temp_name}, inplace=True)
+                S_info = S_info.assign(XLs_satif=pd.Series(XLs_satif))
+                S_info.rename(columns={'XLs_satif':temp_name}, inplace=True)
                 XLs_satif_fields.append(temp_name)
         elif self.Multiple_psi_values:
             all_psis = [v.split(self.psi_head)[1] for v in  self.DF_XLs_psi.columns.values[1:] if 'std' not in v]
             for type_psi in all_psis:
                 XLs_satif = self.get_XLs_satisfaction(S_dist, atomic_XLs, type_psi = type_psi)
                 temp_name = 'XLs_satif_'+type_psi
-                S_tot_scores = S_tot_scores.assign(XLs_satif=pd.Series(XLs_satif))
-                S_tot_scores.rename(columns={'XLs_satif':temp_name}, inplace=True)
+                S_info = S_info.assign(XLs_satif=pd.Series(XLs_satif))
+                S_info.rename(columns={'XLs_satif':temp_name}, inplace=True)
                 XLs_satif_fields.append(temp_name)
         else:
             XLs_satif = self.get_XLs_satisfaction(S_dist, atomic_XLs)
-            S_tot_scores = S_tot_scores.assign(XLs_satif=pd.Series(XLs_satif))
+            S_info = S_info.assign(XLs_satif=pd.Series(XLs_satif))
             XLs_satif_fields.append('XLs_satif')
 
         file_out_xls = 'plot_XLs_%s.pdf'%(traj_number)
-        self.plot_XLs_satisfaction(S_tot_scores['MC_frame'].values, S_tot_scores[XLs_satif_fields], S_dist[sel_nuis], ts_max, file_out_xls)
+        self.plot_XLs_satisfaction(S_info, ts_max, file_out_xls)
         
-        # Add percent of satisfied XLs to DF
-        if self.XLs_restraint_nuisances:
-            nuis_mean = []
-            nuis_std = []
-            nuis_fields = sorted([n for n in S_dist.columns.values if 'Psi' in n])
-            for nuis in sorted(nuis_fields):
-                # Create df instead of dict
-                nuis_mean.append(np.mean(S_dist[nuis].loc[ts_max:]))
-                nuis_std.append(np.std(S_dist[nuis].loc[ts_max:]))
-            self.XLs_nuis[traj_number] = list(nuis_mean) + list(nuis_std)
-
-        return S_tot_scores, S_dist
+        return S_info
 
     def get_XLs_satisfaction(self, S_dist, atomic_XLs, type_XLs = None, type_psi = None):
         
@@ -1188,34 +1133,37 @@ class AnalysisTrajectories(object):
             stats_XLs.to_csv(self.analysis_dir+'XLs_satisfaction_cluster_'+str(cluster)+'.csv')
             dXLs_cluster.to_csv(self.analysis_dir+'XLs_distances_cluster_'+str(cluster)+'.csv')
          
-    def plot_XLs_satisfaction(self, t, perc_per_step, nuis_vals, ts_max, file_out):
+    def plot_XLs_satisfaction(self, S_info, ts_max, file_out):
         
         c = ['gold', 'orange', 'red', 'blue', 'green']
         n_bins = 20
+
+        XLs_percent = [k for k in S_info.columns.values if 'XLs_satif_' in k]
+        XLs_nuis = [k for k in S_info.columns.values if 'CrossLinkingMassSpectrometryRestraint_Psi_' in k]
         
         fig, ax = pl.subplots(figsize=(10.0, 4.0), nrows=1, ncols=3)
         axes = ax.flatten()
-        for i, c in enumerate(perc_per_step.columns.values):
+        for i, c in enumerate(XLs_percent):
             label = c
-            axes[0].plot(t[::10], perc_per_step[c].loc[::10], label=label)
+            axes[0].plot(S_info['MC_frame'][::20], S_info[c].loc[::20], label=label)
         axes[0].set_title('XLs restraint satisfaction', fontsize=14)
         axes[0].set_xlabel('Step',fontsize=12)
         axes[0].set_ylabel('Percent Satisfied',fontsize=12)
         handles, labels = ax[0].get_legend_handles_labels()
         ax[0].legend(handles[::-1], labels[::-1])
 
-        for i, c in enumerate(nuis_vals.columns.values):
+        for i, c in enumerate(XLs_nuis):
             label = c.split('CrossLinkingMassSpectrometryRestraint_')[-1]
-            axes[1].plot(t[::100], nuis_vals[c].loc[::100], label=label)
+            axes[1].plot(S_info['MC_frame'][::20], S_info[c].loc[::20], label=label)
         axes[1].set_title('Psi nuisance parameters', fontsize=14)
         axes[1].set_xlabel('Step',fontsize=12)
         axes[1].set_ylabel('Psi',fontsize=12)
         handles, labels = ax[1].get_legend_handles_labels()
         ax[1].legend(handles[::-1], labels[::-1])
 
-        for i,c in enumerate(nuis_vals.columns.values):
+        for i,c in enumerate(XLs_nuis):
             label = c.split('CrossLinkingMassSpectrometryRestraint_')[-1]
-            axes[2].hist(nuis_vals[c].loc[ts_max:],n_bins, histtype='step',fill=False, label=label)
+            axes[2].hist(S_info[c].loc[ts_max:],n_bins, histtype='step',fill=False, label=label)
             
         axes[2].set_title('Psi nuisance parameters', fontsize=14)
         axes[2].set_xlabel('Psi',fontsize=12)
@@ -1225,7 +1173,8 @@ class AnalysisTrajectories(object):
         
         pl.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.5)
         fig.savefig(self.analysis_dir+file_out)
-
+        pl.close()
+        
     def boxplot_XLs_distances(self, cluster = 0, type_XLs = None, cutoff = 30.0, file_out = 'plot_XLs_distance_distributions.pdf'):
 
         if type_XLs:
@@ -1287,7 +1236,8 @@ class AnalysisTrajectories(object):
 
         pl.tight_layout()
         fig.savefig(self.analysis_dir+file_out)
-                    
+        pl.close()
+        
     def plot_pEMAP_distances(self, pEMAP_satif, file_out):
         n_bins = 20
         fig, ax = pl.subplots(figsize=(4.0, 4.0), nrows=1, ncols=1)
@@ -1299,19 +1249,52 @@ class AnalysisTrajectories(object):
         
         pl.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
         fig.savefig(self.analysis_dir+file_out)
-
-    def plot_Occams_satisfaction(self, Occams_satif, file_out):
+        pl.close()
+        
+    def plot_Occams_satisfaction(self, Occams_info, file_out):
+        c = ['gold', 'red', 'blue', 'green']
+        
         n_bins = 20
-        fig, ax = pl.subplots(figsize=(4.0, 4.0), nrows=1, ncols=1)
+        fig, ax = pl.subplots(figsize=(12.0, 4.0), nrows=1, ncols=3)
+        # Occams satisfaction
+        occams_satif = [k for k in  Occams_info.columns.values if 'OccamsRestraint_satisfied' in k]
         
+        # Occams Psi nuisances
+        occams_psi_nuis = [k for k in  Occams_info.columns.values if ('OccamsRestraint' in k) and ('psi' in k)]
         
-        ax.plot(Occams_satif[::10,0], Occams_satif[::10,1], color='orangered',alpha=0.8)
-        ax.set_title('Occams restraint', fontsize=14)
-        ax.set_xlabel('Step',fontsize=12)
-        ax.set_ylabel('Percent satisfied',fontsize=12)
+        # Occams Sigma nuisances
+        occams_sigma_nuis = [k for k in  Occams_info.columns.values if ('OccamsRestraint_satisfied' in k) and ('sigma' in k)]
+
+        for i, k in enumerate(occams_satif):
+            label = k
+            ax[0].plot(Occams_info['MC_frame'].loc[::20], Occams_info[k].loc[::20], alpha=0.8, label=label)
+        ax[0].set_title('Occams restraint', fontsize=14)
+        ax[0].set_xlabel('Step',fontsize=12)
+        ax[0].set_ylabel('Percent satisfied',fontsize=12)
+        handles, labels = ax[0].get_legend_handles_labels()
+        ax[0].legend(handles[::-1], labels[::-1])
+
+        for i, k in enumerate(occams_psi_nuis):
+            label = k
+            ax[1].plot(Occams_info['MC_frame'].loc[::20], Occams_info[k].loc[::20], alpha=0.8, label=label)
+        ax[1].set_title('Occams restraint nuisances', fontsize=14)
+        ax[1].set_xlabel('Step',fontsize=12)
+        ax[1].set_ylabel('Psi value',fontsize=12)
+        handles, labels = ax[1].get_legend_handles_labels()
+        ax[1].legend(handles[::-1], labels[::-1])
+        
+        for i, k in occams_sigma_nuis:
+            label = k
+            ax[2].plot(Occams_info['MC_frame'].loc[::10], Occams_info[k].loc[::10], color=c[i], alpha=0.8, label=label)
+        ax[2].set_title('Occams restraint nuisances', fontsize=14)
+        ax[2].set_xlabel('Step',fontsize=12)
+        ax[2].set_ylabel('Sigma value',fontsize=12)
+        handles, labels = ax[2].get_legend_handles_labels()
+        ax[2].legend(handles[::-1], labels[::-1])
         
         pl.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
         fig.savefig(self.analysis_dir+file_out)
+        pl.close()
         
     def substrings(self, s):
         for i in range(len(s)):
@@ -1324,6 +1307,3 @@ class AnalysisTrajectories(object):
             return max(intersect, key = len)
         else:
             return strs[0]
-
-
-        

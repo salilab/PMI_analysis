@@ -140,7 +140,7 @@ def statisticalInefficiency_multiscale(A_n, B_n=None, fast=True, mintime=3):
     # Return the computed statistical inefficiency.
     return g
 
-def statisticalInefficiency_geyer(A_n, method='con'):
+def statisticalInefficiency_geyer(A_n, method='pos'):
     """Compute the statistical inefficiency of a timeseries using the methods of Geyer.
 
     Parameters
