@@ -26,7 +26,7 @@ License along with this software. If not, see <http://www.gnu.org/licenses/>.
 
 import numpy as np
 
-def statisticalInefficiency_multiscale(A_n, B_n=None, fast=True, mintime=3):
+def statisticalInefficiency_multiscale(A_n, B_n=None, fast=False, mintime=3):
     """
     Compute the (cross) statistical inefficiency of (two) timeseries using multiscale method from Chodera.
 

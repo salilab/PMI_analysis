@@ -43,7 +43,7 @@ class AnalysisTrajectories(object):
         self.restraint_names = {}
         self.all_score_fields = []
 
-        self.th = 50
+        self.th = 1000
         
         # For multiprocessing
         self.manager = mp.Manager()
@@ -484,6 +484,7 @@ class AnalysisTrajectories(object):
 
         if isinstance(out_dirs_sel, str):
             out_dirs_sel = [out_dirs_sel]
+
         
         for out in out_dirs_sel:
             if self.dir_name in out:
@@ -543,7 +544,7 @@ class AnalysisTrajectories(object):
             ts_eq = []
             for r in sel_entries:
                 try:
-                    [t, g, N] = detectEquilibration(np.array(S_tot_scores[r].loc[self.th:]), nskip=50, method='geyer' )
+                    [t, g, N] = detectEquilibration(np.array(S_tot_scores[r].loc[self.th:]), nskip=100 )
                     ts_eq.append(t)
                 except:
                     ts_eq.append(0)
@@ -693,6 +694,7 @@ class AnalysisTrajectories(object):
         # Write and plot info from clustering
         self.plot_hdbscan_clustering(S_comb_sel, selected_scores)
         self.write_hdbscan_clustering(S_comb_all)
+        self.plot_hdbscan_runs_info(S_comb_all)
 
         S_comb_sel = S_comb_sel.assign(half = pd.Series(S_comb_all['half'],index=S_comb_sel.index).values)
         self.write_summary_hdbscan_clustering(S_comb_all[['Total_score']+selected_scores+['half', 'cluster']])
@@ -717,10 +719,69 @@ class AnalysisTrajectories(object):
             print('Cluster number, number of models: ', cl, n_models)
         out.close()
 
-    def plot_hdbscan_trajectories_info(self, cluster):
-        # TO DO
-        return 0
+    def plot_hdbscan_runs_info(self, S_comb):
+        '''
+        Plot the number of models that come from each run
+        '''
+        
+        # Runs in each half
+        runs_A = []
+        for t in self.dir_halfA:
+            runs_A.append([t for t in t.split('/') if self.dir_name in t][0])
+        runs_A.sort(key=lambda x:float(x.strip(self.dir_name)))
+        runs_B = []
+        for t in self.dir_halfB:
+            runs_B.append([t for t in t.split('/') if self.dir_name in t][0])
+        runs_B.sort(key=lambda x:float(x.strip(self.dir_name)))
+         
+        # Count models per-run
+        clusters = list(set(S_comb['cluster']))
+        clusters = [cl for cl in clusters if cl >=0]
+        
+        clus_sel = 0
+        for cl in clusters:
+            counts_traj_A = pd.DataFrame(columns=['traj','counts_A'])
+            counts_traj_B = pd.DataFrame(columns=['traj','counts_B'])
+            counts_traj_A['traj'] = runs_A
+            counts_traj_B['traj'] = runs_B
+            
+            HH_cluster = S_comb[S_comb['cluster'] == cl]
+            print(self.all_runs)
+            # Select two-halves
+            HA = HH_cluster[(HH_cluster['half']=='A')]
+            HB = HH_cluster[(HH_cluster['half']=='B')]
+            if len(HA['half'].values) >= 0 and len(HB['half'].values) >= 0:
+                for traj in counts_traj_A['traj'].values:
+                    print(traj, )
+                    counts_traj_A.loc[counts_traj_A['traj']==traj,'counts_A'] = len(HA[HA['traj']==traj])
+                for traj in counts_traj_B['traj'].values:
+                    counts_traj_B.loc[counts_traj_B['traj']==traj,'counts_B'] = len(HB[HB['traj']==traj])
+                n_max = np.max(list(counts_traj_A['counts_A'].values) + list(counts_traj_B['counts_B'].values))   
+             
+                # Plot
+                fig, ax = pl.subplots(figsize=(8.0, 3.0), nrows=1, ncols=2)
+                axes = ax.flatten()
+                
+                axes[0].bar(np.arange(len(runs_A)), counts_traj_A['counts_A'],color='gold',label=runs_A)
+                axes[0].set_title('Models sample A')
+                axes[0].set_xlabel('Run number')
+                axes[0].set_ylabel('Number of selected models')
+                axes[0].set_xticks(np.arange(0,len(runs_A),1))
+                axes[0].set_xticklabels(runs_A, rotation=45)
+                axes[0].set_ylim([0,n_max])       
+         
+                axes[1].bar(np.arange(len(runs_A)), counts_traj_B['counts_B'],color='orangered',label=runs_B)
+                axes[1].set_title('Models sample B')
+                axes[1].set_xlabel('Run number')
+                axes[1].set_ylabel('Number of selected models')
+                axes[1].set_xticks(np.arange(0,len(runs_B),1))
+                axes[1].set_xticklabels(runs_B, rotation=45)
+                axes[1].set_ylim([0,n_max])             
 
+                pl.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.5)
+                fig.savefig(self.analysis_dir+'plot_run_models_cluster_'+str(cl)+'.pdf')
+                pl.close()
+        
     def write_hdbscan_clustering(self, S_comb):
 
         ''' 
