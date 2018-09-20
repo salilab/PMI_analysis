@@ -43,7 +43,7 @@ class AnalysisTrajectories(object):
         self.restraint_names = {}
         self.all_score_fields = []
 
-        self.th = 1000
+        self.th = 100
         
         # For multiprocessing
         self.manager = mp.Manager()
@@ -275,7 +275,9 @@ class AnalysisTrajectories(object):
             self.get_score_fields('SimplifiedPEMAP_Score_None', 'pEMAP')
             
             # Percent of restraints satisfied
-            self.pEMAP_satif = self.get_field_id(self.stat2_dict, 'SimplifiedPEMAP_Satisfied')
+            pEMAP_satif = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('PEMAP_Satisfied' in self.stat2_dict[k] and 'Distance' not in self.stat2_dict[k])} 
+            self.all_info.update(pEMAP_satif)
+
             # All pE-MAP distances
             pEMAP_dist = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('SimplifiedPEMAP_Distance_' in self.stat2_dict[k])}
             
@@ -464,7 +466,7 @@ class AnalysisTrajectories(object):
         #return DF, DF_XLs, P_satif, frames_dic
         if dist_fields and other_fields:
             return DF, DF_dXLs, DF_info
-        elif satif_fields and not other_fields:
+        elif not dist_fields and other_fields:
             return DF, None, DF_info
         else:
             return DF, None, None
@@ -544,7 +546,7 @@ class AnalysisTrajectories(object):
             ts_eq = []
             for r in sel_entries:
                 try:
-                    [t, g, N] = detectEquilibration(np.array(S_tot_scores[r].loc[self.th:]), nskip=100 )
+                    [t, g, N] = detectEquilibration(np.array(S_tot_scores[r].loc[self.th:]), nskip=20)
                     ts_eq.append(t)
                 except:
                     ts_eq.append(0)
@@ -746,13 +748,11 @@ class AnalysisTrajectories(object):
             counts_traj_B['traj'] = runs_B
             
             HH_cluster = S_comb[S_comb['cluster'] == cl]
-            print(self.all_runs)
             # Select two-halves
             HA = HH_cluster[(HH_cluster['half']=='A')]
             HB = HH_cluster[(HH_cluster['half']=='B')]
             if len(HA['half'].values) >= 0 and len(HB['half'].values) >= 0:
                 for traj in counts_traj_A['traj'].values:
-                    print(traj, )
                     counts_traj_A.loc[counts_traj_A['traj']==traj,'counts_A'] = len(HA[HA['traj']==traj])
                 for traj in counts_traj_B['traj'].values:
                     counts_traj_B.loc[counts_traj_B['traj']==traj,'counts_B'] = len(HB[HB['traj']==traj])
@@ -779,7 +779,7 @@ class AnalysisTrajectories(object):
                 axes[1].set_ylim([0,n_max])             
 
                 pl.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.5)
-                fig.savefig(self.analysis_dir+'plot_run_models_cluster_'+str(cl)+'.pdf')
+                fig.savefig(self.analysis_dir+'plot_run_models_cluster'+str(cl)+'.pdf')
                 pl.close()
         
     def write_hdbscan_clustering(self, S_comb):
@@ -962,7 +962,9 @@ class AnalysisTrajectories(object):
         gs = gridspec.GridSpec(1, 2,
                                width_ratios = [0.5,0.5],
                                height_ratios = [1.0])
-    
+
+        min_score = np.min([scores_A.min(), scores_B.min()])
+        max_score = np.max([scores_A.max(), scores_B.max()])
         # Plot distributions
         ax= pl.subplot(gs[0])
         ax.hist(scores_A,  n_bins, histtype='step', stacked=True, fill=False, color='orangered')
@@ -1006,7 +1008,10 @@ class AnalysisTrajectories(object):
         ax.errorbar(RH1[:,0], RH1[:,1], yerr=RH1[:,2], c='orangered',fmt='o')
         ax.errorbar(RH2[:,0], RH2[:,1], yerr=RH2[:,2], c='blue',fmt='o')
         ax.axvline(n, color='grey')
+        ax.axhline(max_score, color='grey',ls='dashed',lw=3)
         ax.set_xlim([0.8*M[0],1.1*M[-1]])
+        ax.set_ylim([0.9*min_score,1.05*max_score])
+        
         ax.set_xlabel('Number of models')
         ax.set_ylabel('Minimum score (a.u.)')
 
@@ -1299,11 +1304,13 @@ class AnalysisTrajectories(object):
         fig.savefig(self.analysis_dir+file_out)
         pl.close()
         
-    def plot_pEMAP_distances(self, pEMAP_satif, file_out):
+    def plot_pEMAP_distances(self, S_info, file_out):
         n_bins = 20
         fig, ax = pl.subplots(figsize=(4.0, 4.0), nrows=1, ncols=1)
-    
-        ax.plot(pEMAP_satif[::10,0], pEMAP_satif[::10,1], color='orangered',alpha=0.8)
+
+        pemap_satif = [v for v in S_info.columns.values if 'PEMAP' in v and 'Satisfied' in v][0]
+        
+        ax.plot(S_info['MC_frame'].iloc[::10], S_info[pemap_satif].iloc[::10], color='orangered',alpha=0.8)
         ax.set_title('pE-MAP restraint', fontsize=14)
         ax.set_xlabel('Step',fontsize=12)
         ax.set_ylabel('Percent satisfied',fontsize=12)

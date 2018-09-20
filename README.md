@@ -67,7 +67,6 @@ Utilities for automatically detecting equilibrated region of molecular simulatio
 
 John D. Chodera <john.chodera@choderalab.org>
 
-
 5. Obtain the statistics of the XLs restraint Psi nuisance parameter use:
 ```
 AT.get_Psi_stats()
@@ -75,7 +74,7 @@ AT.get_Psi_stats()
 
 6. Do HDBSCAN clustering for selected scores and/or nuisance parameters:
 ```
-AT.do_hdbscan_clustering(['EV_sum', 'XLs_sum', 'Psi_vals_0.01', 'Psi_vals_0.1'])
+AT.hdbscan_clustering(['EV_sum', 'XLs_sum', 'Psi_vals_0.01', 'Psi_vals_0.1'])
 ```
 
 7. Get information about XLs satisfaction:
@@ -83,7 +82,9 @@ AT.do_hdbscan_clustering(['EV_sum', 'XLs_sum', 'Psi_vals_0.01', 'Psi_vals_0.1'])
 AT.summarize_XLs_info()
 
 ```
-This will create a series of files and plots summarizing the XLs distances and satisfaction in all the clusters obtained in step 6. Files all_info_*.csv contain the information about all models after equilibration. These files can be used to re-run the clustering step:
+This will create a series of files and plots summarizing the XLs distances and satisfaction in all the clusters obtained in step 6. Files $plot_run_models_cluster*.pdf$ show the number of models from each run that are in each cluster. Files $plot_scores_convegence_cluster*.pdf$ show the scores distribution for each cluster.
+
+Files all_info_*.csv contain the information about all models after equilibration. These files can be used to re-run the clustering step:
 
 ```
 AT.read_models_info()
@@ -117,7 +118,7 @@ http://hdbscan.readthedocs.io/en/latest/index.html
 
 10. To test for convergence and do structural clustering, use the script `run_clustering.sh`
 
-Reference for convegence and clustering anlysis:
+Reference for convergence and clustering anlysis:
 
 Assessing exhaustiveness of stochastic sampling for integrative modeling of macromolecular structures. https://doi.org/10.1016/j.bpj.2017.10.005
 
