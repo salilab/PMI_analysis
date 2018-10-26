@@ -24,7 +24,7 @@ import matplotlib.pylab as pl
 import matplotlib.gridspec as gridspec
 import matplotlib.cm as cmx
 import matplotlib.colors as colors
-mpl.rcParams.update({'font.size': 8})
+mpl.rcParams.update({'font.size': 10})
 
 import seaborn as sns
 import hdbscan
@@ -124,6 +124,7 @@ class AnalysisTrajectories(object):
             self.Multiple_atomic_XLs_restraints = True
             self.sum_atomic_XLs_restraint = False
         self.atomic_XLs_cutoffs = atomic_XLs_cutoffs
+        self.ambiguous_XLs_restraint = False
     
     def set_analyze_Connectivity_restraint(self):
         self.Connectivity_restraint = True    
@@ -552,7 +553,7 @@ class AnalysisTrajectories(object):
             ts_eq = []
             for r in sel_entries:
                 try:
-                    [t, g, N] = detectEquilibration(np.array(S_tot_scores[r].loc[self.th:]), nskip=2000)
+                    [t, g, N] = detectEquilibration(np.array(S_tot_scores[r].loc[self.th:]), nskip=500)
                     ts_eq.append(t)
                 except:
                     ts_eq.append(0)
@@ -695,9 +696,8 @@ class AnalysisTrajectories(object):
             S_comb_dist = pd.concat(all_dist_dfs).iloc[::skip]
             self.S_comb_dist = S_comb_dist.assign(cluster = pd.Series(hdbsc.labels_, index=S_comb_dist.index).values)
             self.S_comb_dist.to_csv(self.analysis_dir+'/XLs_info_all.csv', index=False)
-            
- 
-        print('Number of unique clusters: ', len(np.unique(hdbsc.labels_)))
+             
+        print('Number of unique clusters: ', len(np.unique(hdbsc.labels_)), np.unique(hdbsc.labels_))
         
         # Write and plot info from clustering
         self.plot_hdbscan_clustering(S_comb_sel, selected_scores)
@@ -794,6 +794,12 @@ class AnalysisTrajectories(object):
         Write the frames information for each cluster
         '''
 
+        # Remove files from previous runs
+        try:
+            os.remove(self.analysis_dir+'selected_models_A_cluster*')
+        except:
+            pass
+        
         print('Selecting and writing models to extract ...')
         clusters = list(set(S_comb['cluster']))
         clusters = [cl for cl in clusters if cl >=0]
@@ -1156,31 +1162,40 @@ class AnalysisTrajectories(object):
     def summarize_XLs_info(self,
                            Multiple_XLs_restraints =  False,
                            ambiguous_XLs_restraint = False):
+        # Remove files from previous runs
+        try:
+            os.remove(self.analysis_dir+'plot_XLs_distances_*')
+            os.remove(self.analysis_dir+'XLs_satisfaction_cluster_*')
+            os.remove(self.analysis_dir+'XLs_distances_cluster_*')       
+        except:
+            pass
+        
+        # If re-renning analysis
         if self.Multiple_XLs_restraints:
             pass
         else:
             self.Multiple_XLs_restraints = Multiple_XLs_restraints
-        if self.ambiguous_XLs_restraint:
-            pass
-        else:
+        try:
+            if self.ambiguous_XLs_restraint:
+                pass
+        except:
            self.ambiguous_XLs_restraint = ambiguous_XLs_restraint 
         
-        
         unique_clusters = np.sort(list(set(self.S_comb_dist['cluster'])))
-        print('unique_clusters', unique_clusters)
+        print('Summarize XLs, unique_clusters', unique_clusters)
         if self.Multiple_XLs_restraints:
             for type_XLs in self.XLs_cutoffs.keys():
                 cutoff = self.XLs_cutoffs[type_XLs]
                 for cl in unique_clusters[1:]:
                     # Boxplot XLs distances
-                    self.boxplot_XLs_distances(cluster = cl, type_XLs = type_XLs, cutoff = cutoff, file_out = 'plot_XLs_distances_cl'+str(cl)+'_'+type_XLs+'.pdf')
+                    self.boxplot_XLs_distances(cluster = cl, type_XLs = type_XLs, cutoff = cutoff)
                     # XLs satisfaction data
                     self.get_XLs_details(cluster = cl, type_XLs = type_XLs)
         else:
             cutoff = list(self.XLs_cutoffs.values())[0]
             for cl in unique_clusters[1:]:
                 # Boxplot XLs distances
-                self.boxplot_XLs_distances(cluster = cl, cutoff = cutoff, file_out = 'plot_XLs_distances_cl'+str(cl)+'.pdf')
+                self.boxplot_XLs_distances(cluster = cl, cutoff = cutoff)
                 # XLs satisfaction data
                 self.get_XLs_details(cluster = cl)
                 
@@ -1263,8 +1278,13 @@ class AnalysisTrajectories(object):
         fig.savefig(self.analysis_dir+file_out)
         pl.close()
         
-    def boxplot_XLs_distances(self, cluster = 0, type_XLs = None, cutoff = 30.0, file_out = 'plot_XLs_distance_distributions.pdf'):
+    def boxplot_XLs_distances(self, cluster = 0, type_XLs = None, cutoff = 30.0):
 
+        if type_XLs:
+            file_out = 'plot_XLs_distance_distributions_cl'+str(cluster)+'_'+str(type_XLs)+'.pdf'
+        else:
+            file_out = 'plot_XLs_distance_distributions_cl'+str(cluster)+'.pdf'
+        
         if type_XLs:
             dist_columns = [x for x in self.S_comb_dist.columns.values if ('Distance_' in x) and (type_XLs in x)]
         else:
