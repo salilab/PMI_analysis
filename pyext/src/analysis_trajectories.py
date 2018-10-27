@@ -44,6 +44,7 @@ class AnalysisTrajectories(object):
         self.all_score_fields = []
 
         self.th = 100
+        self.rerun = False
         
         # For multiprocessing
         self.manager = mp.Manager()
@@ -207,24 +208,12 @@ class AnalysisTrajectories(object):
             
             # Other quantities associated to XLs (distances and nuisances)
             self.XLs_dist = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('CrossLinkingMassSpectrometryRestraint_Distance_' in self.stat2_dict[k])}
-            #self.XLs_info = XLs_dist
             if self.XLs_restraint_nuisances:
                 XLs_nuis = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('CrossLinkingMassSpectrometryRestraint_Psi_' in self.stat2_dict[k] and 'MonteCarlo_' not in self.stat2_dict[k])}
                 self.all_info.update(XLs_nuis)
                 
-                #self.psi_head = self.get_str_match(list(XLs_nuis.keys()))
-                #for k, v in XLs_nuis.items():
-                #    self.restraint_names[self.name_i] = 'Psi_vals_'+k.split('CrossLinkingMassSpectrometryRestraint_Psi_')[-1]
-                #    self.name_i += 1
-                #    self.all_fields += [v]
-
                 if len(XLs_nuis.keys())> 1:
                     self.Multiple_psi_values = True
-                #XLs_info.update(XLs_nuis)
-                #mm = sorted(list([v for v in XLs_nuis.keys()]))
-                #ss = sorted(list([v+'_std' for v in XLs_nuis.keys()]))
-                #self.DF_XLs_psi = pd.DataFrame(columns=['Trajectory']+mm+ss)
-            #self.xls_fields = self.XLs_info.values()
             
         # Atomic XLs restraint
         if self.atomic_XLs_restraint:
@@ -645,22 +634,37 @@ class AnalysisTrajectories(object):
             kk = k.split(self.dir_name)[-1].split('/')[0]
             T.to_csv(self.analysis_dir+'all_info_'+str(kk)+'.csv')
 
+        if self.XLs_restraint == True:
+            for k, T in self.S_dist_all.items():
+                kk = k.split(self.dir_name)[-1].split('/')[0]
+                T.to_csv(self.analysis_dir+'XLs_info_'+str(kk)+'.csv')
+        
     def read_models_info(self, XLs_cutoffs= None):
         ''' Read info of all models after equilibration'''
+        self.rerun = True
         if XLs_cutoffs:
             self.XLs_cutoffs = XLs_cutoffs        
 
+        # Score files
         info_files = glob.glob(self.analysis_dir+'all_info_*.csv')
         for f in info_files:
             k = f.split('all_info_')[-1].split('.csv')[0]
             df = pd.read_csv(f)
             self.S_all[k] = df
-        
-        xls_all_file = glob.glob(self.analysis_dir+'XLs_info_all.csv')
-        if len(xls_all_file)>0:
-            self.S_comb_dist = pd.read_csv(xls_all_file[0])
-            self.ambiguous_XLs_restraint = True
-            XLs_names = self.S_comb_dist.columns.values
+
+        # XLs files
+        xls_files = glob.glob(self.analysis_dir+'XLs_info_*.csv')
+        if len(xls_files)>0:
+            self.XLs_restraint = True
+            self.ambiguous_XLs_restraint = False
+            for f in xls_files:
+                k = f.split('XLs_info_')[-1].split('.csv')[0]
+                df = pd.read_csv(f)
+                self.S_dist_all[k] = df
+                
+            # Check for ambiguity
+            k0 = list(self.S_dist_all.keys())[0]
+            XLs_names = self.S_dist_all[k0].columns.values
             self.ambiguous_XLs_dict =  self.check_XLs_ambiguity(XLs_names)
         else:
             print('No files with XLs info found')
@@ -692,10 +696,13 @@ class AnalysisTrajectories(object):
 
         # Add cluster labels also to XLs info if available
         if self.XLs_restraint == True:
+    
             all_dist_dfs = [self.S_dist_all[dd] for dd in np.sort(self.S_dist_all.keys())]
-            S_comb_dist = pd.concat(all_dist_dfs).iloc[::skip]
-            self.S_comb_dist = S_comb_dist.assign(cluster = pd.Series(hdbsc.labels_, index=S_comb_dist.index).values)
-            self.S_comb_dist.to_csv(self.analysis_dir+'/XLs_info_all.csv', index=False)
+            S_comb_dist_clustering = pd.concat(all_dist_dfs, sort=False).iloc[::skip]
+        
+            S_comb_dist_clustering = S_comb_dist_clustering.assign(cluster = pd.Series(hdbsc.labels_,index=S_comb_dist_clustering.index).values)
+            S_comb_dist_clustering.to_csv(self.analysis_dir+'/XLs_clustering_info.csv', index=False)
+            self.S_comb_dist_clustering = S_comb_dist_clustering
              
         print('Number of unique clusters: ', len(np.unique(hdbsc.labels_)), np.unique(hdbsc.labels_))
         
@@ -797,6 +804,7 @@ class AnalysisTrajectories(object):
         # Remove files from previous runs
         try:
             os.remove(self.analysis_dir+'selected_models_A_cluster*')
+            os.remove(self.analysis_dir+'selected_models_B_cluster*')
         except:
             pass
         
@@ -1181,7 +1189,7 @@ class AnalysisTrajectories(object):
         except:
            self.ambiguous_XLs_restraint = ambiguous_XLs_restraint 
         
-        unique_clusters = np.sort(list(set(self.S_comb_dist['cluster'])))
+        unique_clusters = np.sort(list(set(self.S_comb_dist_clustering['cluster'])))
         print('Summarize XLs, unique_clusters', unique_clusters)
         if self.Multiple_XLs_restraints:
             for type_XLs in self.XLs_cutoffs.keys():
@@ -1206,24 +1214,24 @@ class AnalysisTrajectories(object):
         '''
         For GSM, determine for each XLs how often it is satisfied.
         '''
-
         if type_XLs:
-            dist_columns = [v for v in self.S_comb_dist.columns.values if 'Distance' in v and type_XLs in v]
+            dist_columns = [v for v in self.S_comb_dist_clustering.columns.values if 'Distance' in v and type_XLs in v]
             cutoff = [v for k,v in self.XLs_cutoffs.items() if type_XLs in k][0]
         else:
-            dist_columns = [v for v in self.S_comb_dist.columns.values if 'Distance' in v]
+            dist_columns = [v for v in self.S_comb_dist_clustering.columns.values if 'Distance' in v]
             cutoff = list(self.XLs_cutoffs.values())[0]
 
         if cluster != 'All':
-            dXLs_cluster = self.S_comb_dist.loc[self.S_comb_dist['cluster'] == cluster, dist_columns]
+            dXLs_cluster = self.S_comb_dist_clustering.loc[self.S_comb_dist_clustering['cluster'] == cluster, dist_columns]
         else:
-            dXLs_cluster = self.S_comb_dist.loc[:, dist_columns]
+            dXLs_cluster = self.S_comb_dist_clustering.loc[:, dist_columns]
             
         stats_XLs = pd.DataFrame()
         stats_XLs['mean'] = dXLs_cluster.mean()
         stats_XLs['std'] = dXLs_cluster.std()
         stats_XLs['min'] = dXLs_cluster.min()
         stats_XLs['max'] = dXLs_cluster.max()
+        
         stats_XLs['perc_satif'] = dXLs_cluster.apply(lambda x: float(len(x[x<cutoff]))/float(len(x)), axis = 0)
 
         if type_XLs:
@@ -1286,10 +1294,10 @@ class AnalysisTrajectories(object):
             file_out = 'plot_XLs_distance_distributions_cl'+str(cluster)+'.pdf'
         
         if type_XLs:
-            dist_columns = [x for x in self.S_comb_dist.columns.values if ('Distance_' in x) and (type_XLs in x)]
+            dist_columns = [x for x in self.S_comb_dist_clustering.columns.values if ('Distance_' in x) and (type_XLs in x)]
         else:
-            dist_columns = [x for x in self.S_comb_dist.columns.values if 'Distance_' in x]
-        dXLs_cluster = self.S_comb_dist.loc[self.S_comb_dist['cluster'] == cluster, dist_columns]
+            dist_columns = [x for x in self.S_comb_dist_clustering.columns.values if 'Distance_' in x]
+        dXLs_cluster = self.S_comb_dist_clustering.loc[self.S_comb_dist_clustering['cluster'] == cluster, dist_columns]
     
         dXLs_unique = pd.DataFrame()
         if self.ambiguous_XLs_restraint == True:
