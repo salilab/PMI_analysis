@@ -87,8 +87,6 @@ class AccuracyModels(object):
         # Plot and write results
         self.plot_accuracy_histograms()
         self.write_accuracy_values()
-        if self.scores_sample_A and self.scores_sample_B:
-            self.plot_score_versus_accuracy()        
 
     def accuracy_rmfs(self, rmfs, cl_accu):
         if len(rmfs)>0:
