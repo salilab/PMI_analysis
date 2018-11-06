@@ -28,16 +28,17 @@ selection_dictionary={"rpb1_1":[(1,846,"rpb1")],
 		      "rpb2":[(1,1110,"rpb2")],
                       "all_sel":[(1,846,"rpb1"),(1060,1379,"rpb1"),(1,1110,"rpb2")]}
 
-manager = mp.Manager()
+
 nproc = 5
 refrmf = 'run_1/all_ini.rmf3'
 clustering_dir = sys.argv[1]
 
 AccuracyModels(selection_dictionary,
                clustering_dir=clustering_dir,
+               ref_rmf3=refrmf,
                scores_sample_A='analys/selected_models_A_cluster0_detailed.csv',
                scores_sample_B='analys/selected_models_B_cluster0_detailed.csv',
-               ref_rmf3=refrmf,
+               dir_name='run_',
                nproc=nproc)
 
 
