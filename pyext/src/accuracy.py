@@ -23,9 +23,10 @@ class AccuracyModels(object):
     def __init__(self,
                  selection_dictionary,
                  clustering_dir,
+                 ref_rmf3,
                  scores_sample_A,
                  scores_sample_B,
-                 ref_rmf3,
+                 dir_name = 'run_',
                  nproc=6):
 
         self.selection_dictionary = selection_dictionary
@@ -33,11 +34,12 @@ class AccuracyModels(object):
         self.scores_sample_A = scores_sample_A
         self.scores_sample_B = scores_sample_B
         self.ref_rmf3 = ref_rmf3       
-
+        self.dir_name = dir_name
+        
         self.manager = mp.Manager()
 
-        self.all_accu = {}
-        self.ids_all = {}
+        self.all_accu = self.manager.dict()
+        self.ids_all = self.manager.dict()
  
         # Read all models files
         self.read_scores_files()
@@ -53,8 +55,8 @@ class AccuracyModels(object):
             for line in open(cl, 'r'):
                 rmf_file = self.ids_all[line.split('\n')[0]]
                 rmfs_clus.append(rmf_file)
+            print('cluster', cl, len(rmfs_clus))
             
-            rmfs_clus = rmfs_clus[::2]
             # Divide rmfs into groups
             ND = int(np.ceil(len(rmfs_clus)/float(nproc)))
             rmfs_dict = {}
@@ -79,12 +81,14 @@ class AccuracyModels(object):
                 p.join()
 
             # Add to dictionary
+            print('cluster 2', len(cl_accu))
             self.all_accu[cl_number] = cl_accu
 
         # Plot and write results
         self.plot_accuracy_histograms()
         self.write_accuracy_values()
-        self.plot_score_versus_accuracy()        
+        if self.scores_sample_A and self.scores_sample_B:
+            self.plot_score_versus_accuracy()        
 
     def accuracy_rmfs(self, rmfs, cl_accu):
         if len(rmfs)>0:
@@ -129,8 +133,8 @@ class AccuracyModels(object):
                 T = []
                 for f, accu in v:
                     f_short = f.split('/')[-1]
-                    run = 'run_'+f_short.split('_')[2]
-                    frame = f_short.split('_')[3].split('.rmf3')[0]
+                    run = self.dir_name+f_short.split(self.dir_name)[-1].split('_')[0]
+                    frame = f_short.split('.rmf3')[0].split('_')[-1]
                     if len( self.S[(self.S['traj'] == run) & (self.S['MC_frame'] == float(frame))])>0:
                         score = self.S[(self.S['traj'] == run) & (self.S['MC_frame'] == float(frame))]['Total_score'].values[0]
                         T.append([score, accu])
@@ -140,17 +144,33 @@ class AccuracyModels(object):
         out_summary.close()
 
     def plot_accuracy_histograms(self):
+        """
+        Plot all clusters accuracy distribution.
+        Only cluster0 is shown in orange. All other
+        clusters are shown in grey.
+        """
+
+        colors = ['gold','dodgerblue','forestgreen','palegreen','darkviolet','darkblue']
         n_bins = 10
         clus_all = sorted(self.all_accu.keys())
         fig, ax = pl.subplots(figsize=(5.0, 5.0), nrows=1, ncols=1)
-        palette = pl.get_cmap('Set1')
-        colors = [palette(1.*i/len(clus_all)) for i in range(len(clus_all))]
         for i, clus in enumerate(clus_all):
             if len(np.array(self.all_accu[clus]))> 0:
                 A = np.array(self.all_accu[clus])[:,1].astype(float)
-                ax.hist(A, n_bins,  histtype='step',fill=False, color=colors[i],alpha=0.9)
-                ax.axvline(np.mean(A), color=colors[i], alpha=0.9)
-             
+                if i==0:
+                    ax.hist(A, n_bins,  histtype='step',fill=False, color='orangered',alpha=0.9, lw=4, label='cluster '+str(clus))
+                    ax.axvline(np.mean(A), color='orangered', alpha=0.9)
+                else:
+                    if len(clus_all)<=6:
+                        color = colors[i-1]
+                    else:
+                        color = 'grey'
+                    ax.hist(A, n_bins,  histtype='step',fill=False, color='grey',alpha=0.5, label='cluster '+str(clus))
+                    ax.axvline(np.mean(A), color='grey', alpha=0.2, ls='dashed')
+
+        if len(clus_all)<=6:
+            handles, labels = ax.get_legend_handles_labels()
+            ax.legend(handles, labels)
         ax.set_title('Accuracy of selected models', fontsize=14)
         ax.set_xlabel('Accuracy (A)',fontsize=12)
         ax.set_ylabel('Number of models',fontsize=12)
