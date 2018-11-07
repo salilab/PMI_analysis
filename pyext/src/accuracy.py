@@ -163,7 +163,7 @@ class AccuracyModels(object):
                         color = colors[i-1]
                     else:
                         color = 'grey'
-                    ax.hist(A, n_bins,  histtype='step',fill=False, color='grey',alpha=0.5, label='cluster '+str(clus))
+                    ax.hist(A, n_bins,  histtype='step',fill=False, color=color, alpha=0.5, label='cluster '+str(clus))
                     ax.axvline(np.mean(A), color='grey', alpha=0.2, ls='dashed')
 
         if len(clus_all)<=6:
