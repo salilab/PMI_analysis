@@ -27,6 +27,7 @@ class AccuracyModels(object):
                  scores_sample_A,
                  scores_sample_B,
                  dir_name = 'run_',
+                 out_header = 'all',
                  nproc=6):
 
         self.selection_dictionary = selection_dictionary
@@ -35,6 +36,7 @@ class AccuracyModels(object):
         self.scores_sample_B = scores_sample_B
         self.ref_rmf3 = ref_rmf3       
         self.dir_name = dir_name
+        self.out_header = out_header
         
         self.manager = mp.Manager()
 
@@ -121,10 +123,10 @@ class AccuracyModels(object):
 
     def write_accuracy_values(self):
         self.score_accu = {}
-        out_summary = open(self.clustering_dir+'/accuracy_summary_clusters.dat','w')
+        out_summary = open(self.clustering_dir+'/accuracy_'+self.out_header+'_clusters.dat','w')
         out_summary.write('cluster mean min max N \n')
         for k, v in self.all_accu.iteritems():
-            out = open(self.clustering_dir+'/accuracy_cl'+str(k)+'.dat','w')
+            out = open(self.clustering_dir+'/accuracy_'+self.out_header+'_cl'+str(k)+'.dat','w')
             if len(np.array(v))> 0:
                 vv = np.array(v)[:,1].astype(float)
                 out_summary.write(str(k)+'\t'+str(np.mean(vv))+'\t'+str(np.min(vv))+'\t'+str(np.max(vv))+'\t'+str(len(vv))+'\n')
@@ -174,7 +176,7 @@ class AccuracyModels(object):
         ax.set_ylabel('Number of models',fontsize=12)
 
         pl.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
-        fig.savefig(self.clustering_dir+'/plot_accuracy_all_clusters.pdf')
+        fig.savefig(self.clustering_dir+'/plot_accuracy_'+self.out_header+'_clusters.pdf')
         
         
     def plot_score_versus_accuracy(self):
@@ -186,4 +188,4 @@ class AccuracyModels(object):
         ax.set_ylabel('Accuracy (A)',fontsize=12)
         
         pl.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
-        fig.savefig(self.clustering_dir+'/plot_score_vs_accuracy.pdf')
+        fig.savefig(self.clustering_dir+'/plot_score_vs_accuracy_'+self.out_header+'.pdf')

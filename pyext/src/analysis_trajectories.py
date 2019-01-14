@@ -34,16 +34,18 @@ class AnalysisTrajectories(object):
                  out_dirs,
                  dir_name = 'run_', 
                  analysis_dir = 'analys/',
-                 nproc=6):
+                 nproc=6,
+                 nskip=200):
 
         self.out_dirs = out_dirs
         self.dir_name = dir_name
         self.analysis_dir = analysis_dir
         self.nproc = nproc
+        self.nskip = nskip
         self.restraint_names = {}
         self.all_score_fields = []
 
-        self.th = 100
+        self.th = 20
         self.rerun = False
         
         # For multiprocessing
@@ -55,7 +57,8 @@ class AnalysisTrajectories(object):
         self.XLs_nuis = self.manager.dict()
         
         # Sample stat file
-        stat_files = np.sort(glob.glob(self.out_dirs[0]+'stat.*.out'))
+        stat_files = np.sort(glob.glob(self.out_dirs[0]+'/stat.*.out'))
+        print(stat_files)
         self.stat2_dict = self.get_keys(stat_files[0])
 
         # Define with restraints to analyze
@@ -80,6 +83,10 @@ class AnalysisTrajectories(object):
         self.DOPE_restraint = False
         self.MembraneExclusion_restraint = False
         self.MembraneSurfaceLocation_restraint = False
+        self.score_only_restraint = False
+
+        # Other handles
+        self.restraints_handles = []
 
         # By default, add restraints of same type
         self.sum_Connectivity_restraint = True
@@ -163,6 +170,10 @@ class AnalysisTrajectories(object):
 
     def set_analyze_MembraneSurfaceLocation_restraint(self):
         self.MembraneSurfaceLocation_restraint = True
+
+    def set_analyze_score_only_restraint(self, handle):
+        self.score_only_restraint = True
+        self.restraints_handles.append(handle)
         
     def set_select_by_Total_score(self, score_cutoff):
         self.select_Total_score = True
@@ -261,25 +272,28 @@ class AnalysisTrajectories(object):
         if self.pEMAP_restraint_new:
             self.get_score_fields('pEMapRestraint_Score', 'pEMAP')
 
+            pEMAP_satif = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('pEMapRestraint_satisfaction' in self.stat2_dict[k])} 
+            self.all_info.update(pEMAP_satif)
+            
             pEMAP_sigma = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('pEMapRestraint_sigma' in self.stat2_dict[k] and 'Score' not in self.stat2_dict[k])}
             self.all_info.update(pEMAP_sigma)
     
         if self.pEMAP_restraint:
-            self.get_score_fields('SimplifiedPEMAP_Score_None', 'pEMAP')
+            self.get_score_fields('SimplifiedPEMAP_data_Score', 'pEMAP')
             
             # Percent of restraints satisfied
-            pEMAP_satif = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('PEMAP_Satisfied' in self.stat2_dict[k] and 'Distance' not in self.stat2_dict[k])} 
+            pEMAP_satif = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('SimplifiedPEMAP_Satisfied' in self.stat2_dict[k] and 'Distance' not in self.stat2_dict[k])} 
             self.all_info.update(pEMAP_satif)
 
             # All pE-MAP distances
-            pEMAP_dist = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('SimplifiedPEMAP_Distance_' in self.stat2_dict[k])}
+            #pEMAP_dist = {self.stat2_dict[k]: k for k in self.stat2_dict.keys() if ('SimplifiedPEMAP_Distance_' in self.stat2_dict[k])}
             
             # Get target distance from stat file
-            d_pEMAP = []
-            v_pEMAP = []
-            for k, val in pEMAP_dist.items():
-                d_pEMAP.append(float(k.split('_')[-1]))        
-                v_pEMAP.append(val)
+            #d_pEMAP = []
+            #v_pEMAP = []
+            #for k, val in pEMAP_dist.items():
+            #    d_pEMAP.append(float(k.split('_')[-1]))        
+            #    v_pEMAP.append(val)
 
         if self.Distance_restraint:
             self.get_score_fields('DistanceRestraint_Score', 'DR')
@@ -295,6 +309,10 @@ class AnalysisTrajectories(object):
             
         if self.MembraneSurfaceLocation_restraint:
             self.get_score_fields('MembraneSurfaceLocation', 'MSL')
+
+        if self.score_only_restraint:
+            for handle in self.restraints_handles:
+                self.get_score_fields(handle, handle.split('_')[0])
             
     def get_score_fields(self, name_stat_file, short_name):
         '''
@@ -542,7 +560,7 @@ class AnalysisTrajectories(object):
             ts_eq = []
             for r in sel_entries:
                 try:
-                    [t, g, N] = detectEquilibration(np.array(S_tot_scores[r].loc[self.th:]), nskip=500)
+                    [t, g, N] = detectEquilibration(np.array(S_tot_scores[r].loc[self.th:]), nskip=self.nskip)
                     ts_eq.append(t)
                 except:
                     ts_eq.append(0)
@@ -550,12 +568,12 @@ class AnalysisTrajectories(object):
             ts_max = np.max(ts_eq)+self.th
         
             # Plot the scores and restraint satisfaction
-            file_out = 'plot_scores_%s.pdf'%(traj_number)               
+            file_out = 'plot_scores_%s.pdf'%(traj_number)
             self.plot_scores_restraints(S_tot_scores[['MC_frame']+sel_entries], ts_eq, file_out)
         
-            if self.pEMAP_restraint:
+            if self.pEMAP_restraint_new:
                 file_out_pemap = 'plot_pEMAP_%s.pdf'%(traj_number) 
-                self.plot_pEMAP_distances(S_info, file_out_pemap)
+                self.plot_pEMAP_satisfaction(S_info, file_out_pemap)
 
             if self.Occams_restraint:
                 file_out_occams = 'plot_Occams_satisfaction_%s.pdf'%(traj_number) 
@@ -585,8 +603,12 @@ class AnalysisTrajectories(object):
                 S_tot_scores = S_tot_scores.assign(half = pd.Series([0]*len(S_tot_scores), index=S_tot_scores.index).values)
 
             # Collect distances and nuisances information
+
             self.S_all[out] = S_tot_scores[ts_max:]
-            self.S_info_all[out] = S_info[ts_max:]
+            try:
+                self.S_info_all[out] = S_info[ts_max:]
+            except:
+                print('No S_info')
             if self.XLs_restraint:
                 self.S_dist_all[out] = S_dist[ts_max:]
             if self.atomic_XLs_restraint:
@@ -635,7 +657,9 @@ class AnalysisTrajectories(object):
             T.to_csv(self.analysis_dir+'all_info_'+str(kk)+'.csv')
 
         if self.XLs_restraint == True:
-            for k, T in self.S_dist_all.items():
+            print(len(self.S_dist_all), type(self.S_dist_all), self.S_dist_all.keys())
+            for k in self.S_dist_all.keys():
+                T = self.S_dist_all[k]
                 kk = k.split(self.dir_name)[-1].split('/')[0]
                 T.to_csv(self.analysis_dir+'XLs_info_'+str(kk)+'.csv')
         
@@ -682,7 +706,8 @@ class AnalysisTrajectories(object):
 
         all_dfs = [self.S_all[dd] for dd in np.sort(self.S_all.keys())]
         S_comb = pd.concat(all_dfs)
-        
+       
+        print('All available fields: ', S_comb.columns.values) 
         S_comb_sel = S_comb[selected_scores].iloc[::skip]
         S_comb_all = S_comb.iloc[::skip]       
 
@@ -1354,11 +1379,11 @@ class AnalysisTrajectories(object):
         fig.savefig(self.analysis_dir+file_out)
         pl.close()
         
-    def plot_pEMAP_distances(self, S_info, file_out):
+    def plot_pEMAP_satisfaction(self, S_info, file_out):
         n_bins = 20
         fig, ax = pl.subplots(figsize=(4.0, 4.0), nrows=1, ncols=1)
 
-        pemap_satif = [v for v in S_info.columns.values if 'PEMAP' in v and 'Satisfied' in v][0]
+        pemap_satif = [v for v in S_info.columns.values if 'pEMapRestraint_satisfaction' in v][0]
         
         ax.plot(S_info['MC_frame'].iloc[::10], S_info[pemap_satif].iloc[::10], color='orangered',alpha=0.8)
         ax.set_title('pE-MAP restraint', fontsize=14)

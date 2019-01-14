@@ -29,7 +29,7 @@ AT.set_analyze_Connectivity_restraint()
 AT.set_analyze_Excluded_volume_restraint()
 ```
 
-If you set up more than one XLs restraint, you should include the *Multiple_XLs_restraints = True* flag in the analysus and include a cutoff for all of them in the *XLs_cutoffs* dictionary. For example, if you divided the DSSO XLs into a intra-subunit and inter-subunit datasets, there should be two elements in the *XLs_cutoffs* dictionary (even if they have the same cutoff):
+If you set up more than one XLs restraint, you should include the *Multiple_XLs_restraints = True* flag in the analysis and include a cutoff for all of them in the *XLs_cutoffs* dictionary. For example, if you divided the DSSO XLs into a intra-subunit and inter-subunit datasets, there should be two elements in the *XLs_cutoffs* dictionary (even if they have the same cutoff):
 
 ```
 XLs_cutoffs = {'DSSO_Inter':30.0, 'DSSO_Intra':30.0}
@@ -45,6 +45,14 @@ AT.set_analyze_XLs_restraint(XLs_cutoffs = XLs_cutoffs,
                              ambiguous_XLs_restraint = True)
 
 ```
+
+If you want to analyze a restraint that is not standard to IMP, you can do so by including the handle associated to that restraint in the stat file:
+
+```
+AT.set_analyze_score_only_restraint('COMDistanceRestraint_data_Score')
+```
+
+This will only analyze the scores (not any nuisances associated with it, or some other statistics).
 
 3. Identify where each of the restraints scores and other relevant information is stored in the stat files:
 
@@ -74,8 +82,10 @@ AT.get_Psi_stats()
 
 6. Do HDBSCAN clustering for selected scores and/or nuisance parameters:
 ```
-AT.hdbscan_clustering(['EV_sum', 'XLs_sum', 'Psi_vals_0.01', 'Psi_vals_0.1'])
+AT.hdbscan_clustering(['EV_sum', 'XLs_sum'])
 ```
+
+If you added a non-standard restraint, you can use it in clustering with the name 'COMDistanceRestraint' previously used (everything before the first _)
 
 7. Get information about XLs satisfaction:
 ```
