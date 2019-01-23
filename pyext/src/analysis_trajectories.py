@@ -257,7 +257,8 @@ class AnalysisTrajectories(object):
         for handle in self.distance_handles:
             dist = {stat2_dict[k]: k for k in stat2_dict.keys() if (handle in stat2_dict[k] and 'Score' not in stat2_dict[k])}
             dist_dict.update(dist)
-        dist_names = np.sort(dist_dict.keys())
+        dist_names = list(dist_dict.keys())
+        dist_names.sort()
         dist_fields = [dist_dict[k] for k in dist_names]
     
         return list(dist_names), dist_fields
@@ -268,7 +269,8 @@ class AnalysisTrajectories(object):
         for handle in self.info_handles:
             info = {stat2_dict[k]: k for k in stat2_dict.keys() if (handle in stat2_dict[k] and 'MonteCarlo_' not in stat2_dict[k] and 'Score' not in stat2_dict[k]  )}
             info_dict.update(info)
-        info_names = np.sort(info_dict.keys())
+        info_names = list(info_dict.keys())
+        info_names.sort()
         info_fields = [info_dict[k] for k in info_names]
     
         return list(info_names), info_fields
