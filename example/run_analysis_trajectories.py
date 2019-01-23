@@ -44,7 +44,6 @@ AT.set_analyze_Connectivity_restraint()
 AT.set_analyze_Excluded_volume_restraint()
 
 # Read stat files
-AT.get_restraint_fields()
 AT.read_stat_files()
 AT.write_models_info()
 AT.get_Psi_stats()

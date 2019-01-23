@@ -54,13 +54,8 @@ AT.set_analyze_score_only_restraint('COMDistanceRestraint_data_Score')
 
 This will only analyze the scores (not any nuisances associated with it, or some other statistics).
 
-3. Identify where each of the restraints scores and other relevant information is stored in the stat files:
 
-```
-AT.get_restraint_fields()
-```
-
-4. Read the stat files to obtain the scores, nuisances parameters, and information about the rmf3 files:
+3. Read the stat files to obtain the scores, nuisances parameters, and information about the rmf3 files:
 
 ```
 AT.read_stat_files()
@@ -75,19 +70,19 @@ Utilities for automatically detecting equilibrated region of molecular simulatio
 
 John D. Chodera <john.chodera@choderalab.org>
 
-5. Obtain the statistics of the XLs restraint Psi nuisance parameter use:
+4. Obtain the statistics of the XLs restraint Psi nuisance parameter use:
 ```
 AT.get_Psi_stats()
 ```
 
-6. Do HDBSCAN clustering for selected scores and/or nuisance parameters:
+5. Do HDBSCAN clustering for selected scores and/or nuisance parameters:
 ```
 AT.hdbscan_clustering(['EV_sum', 'XLs_sum'])
 ```
 
 If you added a non-standard restraint, you can use it in clustering with the name 'COMDistanceRestraint' previously used (everything before the first _)
 
-7. Get information about XLs satisfaction:
+6. Get information about XLs satisfaction:
 ```
 AT.summarize_XLs_info()
 
@@ -103,7 +98,7 @@ AT.hdbscan_clustering(['EV_sum', 'XLs_sum'])
 
 After clustering a series of files are written with the information of frames in each cluster.
 
-8. To re-rerun the clustering step without having to read all the stat files again, you can read the relevant information from the `all_info_*.csv` files:
+7. To re-rerun the clustering step without having to read all the stat files again, you can read the relevant information from the `all_info_*.csv` files:
 
 ```
 XLs_cutoffs = {'DSSO_Inter':30.0, 'DSSO_Intra':30.0}
@@ -124,13 +119,13 @@ Reference for HDBSCAN clustering:
 
 http://hdbscan.readthedocs.io/en/latest/index.html
 
-9. To extract the models from the rmf3 file, use the script `run_extract_models.py`. 
+8. To extract the models from the rmf3 file, use the script `run_extract_models.py`. 
 
-10. To test for convergence and do structural clustering, use the script `run_clustering.sh`
+9. To test for convergence and do structural clustering, use the script `run_clustering.sh`
 
 Reference for convergence and clustering anlysis:
 
 Assessing exhaustiveness of stochastic sampling for integrative modeling of macromolecular structures. https://doi.org/10.1016/j.bpj.2017.10.005
 
 
-11. If you know the structure of complex (i.e. you are benckmarking a method), you can determine the accuracy of the structural models using `get_accuracy_rmfs.py`
+10. If you know the structure of complex (i.e. you are benckmarking a method), you can determine the accuracy of the structural models using `get_accuracy_rmfs.py`
