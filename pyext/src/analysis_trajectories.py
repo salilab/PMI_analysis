@@ -8,6 +8,7 @@ from __future__ import division
 
 import sys
 import os
+import gc
 import math
 import glob
 import random
@@ -178,6 +179,11 @@ class AnalysisTrajectories(object):
         self.restraint_names['OccamsRestraint_Score']='Struct_Equiv'
         self.restraint_names['OccamsRestraint_psi_Score']='Struct_Equiv_psi'
         self.restraint_names['OccamsRestraint_sigma_Score']='Struct_Equiv_sigma'
+
+        # Other relevant info
+        self.info_handles.append('OccamsRestraint_satisfied')
+        self.info_handles.append('OccamsRestraint_sigma')
+        self.info_handles.append('OccamsRestraint_psi')
         self.Occams_restraint = True
          
     def set_analyze_Occams_positional_restraint(self):
@@ -380,7 +386,8 @@ class AnalysisTrajectories(object):
                     if len(info_fields) > 0:
                         p0 = [s0[0]] + [float(d[field]) for field in info_fields]
                         P_info.append(p0)
-                    
+
+        gc.collect()
         # Sort based on frame
         S_scores.sort(key=lambda x: float(x[0]))
         
@@ -1286,15 +1293,18 @@ class AnalysisTrajectories(object):
                     dXLs_unique[XLs_min] =  dXLs_cluster[XLs_min]
         else:
             dXLs_unique = dXLs_cluster    
-    
+
         # Get distances and order based on the mean
         columns = ['entry', 'mean', 'id']
         XLs_ids = pd.DataFrame(columns = columns)
+        min_all = []
         for i, v in enumerate(dXLs_unique.columns.values):
             m = np.mean(dXLs_unique[v])
             ll = v.split('_|')[1]
             label = '|'.join(ll.split('|')[2:6])
-            XLs_ids = XLs_ids.append(pd.Series([int(i),m,label], index=columns), ignore_index=True)
+            if m > 0:
+                XLs_ids = XLs_ids.append(pd.Series([int(i),m,label], index=columns), ignore_index=True)
+                min_all.append(m)
         XLs_ids = XLs_ids.sort_values(by=['mean'])
         labels_ordered = XLs_ids['id'].values
 
@@ -1326,6 +1336,25 @@ class AnalysisTrajectories(object):
         pl.tight_layout()
         fig.savefig(self.analysis_dir+file_out)
         pl.close()
+
+        # Plot histogram of best cluster distances
+        if type_XLs:
+            file_out_hist = 'plot_XLs_distance_histogram_cl'+str(cluster)+'_'+str(type_XLs)+'.pdf'
+        else:
+            file_out_hist = 'plot_XLs_distance_histogram_cl'+str(cluster)+'.pdf'
+        self.plot_XLs_satisfaction_histogram(min_all, cutoff, file_out_hist)
+
+    def plot_XLs_satisfaction_histogram(self, min_all, cutoff, file_out_hist):
+        fig, ax = pl.subplots(figsize=(5, 5), nrows=1, ncols=1)
+
+        ax.hist(min_all, 20, color='b', alpha=0.5)
+        ax.axvline(x=cutoff, color='orange',alpha=0.7,lw=3)
+        ax.set_xlabel('Distance (A)', fontsize=12)
+        ax.set_ylabel('Number of XLs')
+        ax.set_title('XLs satisfaction')
+        pl.tight_layout()
+        fig.savefig(self.analysis_dir+file_out_hist)
+        pl.close()
         
     def plot_pEMAP_satisfaction(self, S_info, file_out):
         n_bins = 20
@@ -1343,8 +1372,10 @@ class AnalysisTrajectories(object):
         pl.close()
         
     def plot_Occams_satisfaction(self, Occams_info, file_out):
+        ''' Plot percent of restraint satisfied and the distribution of the nuisances'''
+        
         c = ['gold', 'red', 'blue', 'green']
-          
+
         n_bins = 20
         fig, ax = pl.subplots(figsize=(12.0, 4.0), nrows=1, ncols=3)
         # Occams satisfaction
@@ -1354,7 +1385,7 @@ class AnalysisTrajectories(object):
         occams_psi_nuis = [k for k in  Occams_info.columns.values if ('OccamsRestraint' in k) and ('psi' in k)]
         
         # Occams Sigma nuisances
-        occams_sigma_nuis = [k for k in  Occams_info.columns.values if ('OccamsRestraint_satisfied' in k) and ('sigma' in k)]
+        occams_sigma_nuis = [k for k in  Occams_info.columns.values if ('OccamsRestraint' in k) and ('sigma' in k)]
 
         for i, k in enumerate(occams_satif):
             label = k
@@ -1374,7 +1405,7 @@ class AnalysisTrajectories(object):
         handles, labels = ax[1].get_legend_handles_labels()
         ax[1].legend(handles[::-1], labels[::-1])
         
-        for i, k in occams_sigma_nuis:
+        for i, k in enumerate(occams_sigma_nuis):
             label = k
             ax[2].plot(Occams_info['MC_frame'].loc[::10], Occams_info[k].loc[::10], color=c[i], alpha=0.8, label=label)
         ax[2].set_title('Occams restraint nuisances', fontsize=14)
