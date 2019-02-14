@@ -47,11 +47,13 @@ class AccuracyModels(object):
         self.read_scores_files()
 
         # Read cluster files
-        clusters = glob.glob(self.clustering_dir+'cluster.*.all.txt')
+        clusters = glob.glob(self.clustering_dir+'/cluster.*.all.txt')
         n_clusters = len(clusters)
+        print(clusters, self.clustering_dir)
 
         self.all_accu = {}
         for cl in clusters:
+            print('cl', cl)
             cl_number = cl.split('.')[-3]
             rmfs_clus = []
             for line in open(cl, 'r'):
@@ -136,7 +138,7 @@ class AccuracyModels(object):
                     run = self.dir_name+f_short.split(self.dir_name)[-1].split('_')[0]
                     frame = f_short.split('.rmf3')[0].split('_')[-1]
                     if len( self.S[(self.S['traj'] == run) & (self.S['MC_frame'] == float(frame))])>0:
-                        score = self.S[(self.S['traj'] == run) & (self.S['MC_frame'] == float(frame))]['Total_score'].values[0]
+                        score = self.S[(self.S['traj'] == run) & (self.S['MC_frame'] == float(frame))]['Total_Score'].values[0]
                         T.append([score, accu])
                         out.write('%s\t%s\t%s \n'%(f_short,accu,score))
                 out.close()

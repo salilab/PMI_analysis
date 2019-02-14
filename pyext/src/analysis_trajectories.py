@@ -46,17 +46,27 @@ class AnalysisTrajectories(object):
         self.restraint_names = {}
         self.all_score_fields = []
 
-        self.th = 200
+        self.th = 1000
         self.rerun = False
         
         # For multiprocessing
         self.manager = mp.Manager()
         self.S_all = self.manager.dict()
         self.S_info_all = self.manager.dict()
-        self.S_files = self.manager.dict()
         self.S_dist_all = self.manager.dict()
         self.XLs_nuis = self.manager.dict()
-        
+       
+        # Global sampling parameters
+        self.Sampling = self.manager.dict()
+        s_vals = ['Number_of_replicas', 
+                  'Replica_exchange_temperature_range',
+                  'N_equilibrated',
+                  'N_total']
+ 
+        for v in s_vals:
+            self.Sampling[v] = []
+        self.Validation = self.manager.dict()
+
         # Sample stat file
         stat_files = np.sort(glob.glob(self.out_dirs[0]+'/stat.*.out'))
 
@@ -321,7 +331,10 @@ class AnalysisTrajectories(object):
 
     def read_stat_files(self):
         '''Multiprocessor reading of stat files'''
+
         
+        self.Sampling['Number_of_runs'] = len(self.out_dirs)
+    
         # Split directories
         ND = int(np.ceil(len(self.out_dirs)/float(self.nproc)))
         out_dirs_dict = {}
@@ -387,7 +400,6 @@ class AnalysisTrajectories(object):
                         p0 = [s0[0]] + [float(d[field]) for field in info_fields]
                         P_info.append(p0)
 
-        gc.collect()
         # Sort based on frame
         S_scores.sort(key=lambda x: float(x[0]))
         
@@ -473,16 +485,19 @@ class AnalysisTrajectories(object):
                 traj = 0
                 traj_number = 0
             stat_files = np.sort(glob.glob(out+'stat.*.out'))
-            
+            self.Sampling['Number_of_replicas'] = self.Sampling['Number_of_replicas'] + [len(stat_files)]
+        
             # Read all stat files of trajectory
             S_tot_scores, S_dist, S_info = self.read_stats_detailed(traj,
                                                                     stat_files)
 
+            n_frames = len(S_tot_scores)
             print('The mean score, min score, and n frames are: ', traj_number,
                   np.mean(S_tot_scores['Total_Score'].iloc[self.th:]),
                   np.min(S_tot_scores['Total_Score'].iloc[self.th:]),
-                  len(S_tot_scores))
-                
+                  n_frames)
+            self.Sampling['N_total'] = self.Sampling['N_total'] + [n_frames]
+            
             # Selection of just sums (default)
             sel_entries = ['Total_Score']+[v for v in S_tot_scores.columns.values if 'sum' in v]
             
@@ -517,7 +532,8 @@ class AnalysisTrajectories(object):
                     ts_eq.append(0)
             print('Trajectory, ts_eqs: ',traj, ts_eq)
             ts_max = np.max(ts_eq)+self.th
-        
+            self.Sampling['N_equilibrated'] = self.Sampling['N_equilibrated'] + [n_frames - ts_max] 
+                
             # Plot the scores and restraint satisfaction
             file_out = 'plot_scores_%s.pdf'%(traj_number)
             self.plot_scores_restraints(S_tot_scores[['MC_frame']+sel_entries], ts_eq, file_out)
@@ -601,7 +617,9 @@ class AnalysisTrajectories(object):
         pl.close()
         
     def write_models_info(self):
-        ''' Write info of all models after equilibration'''
+        ''' 
+        Write info of all models after equilibration
+        '''
        
         for k, T in self.S_all.items():
             kk = k.split(self.dir_name)[-1].split('/')[0]
@@ -614,7 +632,10 @@ class AnalysisTrajectories(object):
                 T.to_csv(self.analysis_dir+'XLs_info_'+str(kk)+'.csv')
         
     def read_models_info(self, XLs_cutoffs= None):
-        ''' Read info of all models after equilibration'''
+        '''
+        Read info of all models after equilibration
+        '''
+        
         self.rerun = True
         if XLs_cutoffs:
             self.XLs_cutoffs = XLs_cutoffs        
@@ -690,25 +711,36 @@ class AnalysisTrajectories(object):
         self.write_summary_hdbscan_clustering(S_comb_all[['Total_Score']+selected_scores+['half', 'cluster']])
 
     def write_summary_hdbscan_clustering(self, S_comb_all):
-
         ''' 
         Write clustering summary information 
         (i.e. cluster number, average scores, number of models)
         '''
-        
-        clusters = list(set(S_comb_all['cluster']))
-        
-        out = open(self.analysis_dir+'summary_hdbscan_clustering.dat', 'w')
-        out.write(' '.join(S_comb_all.columns.values) +' n_models n_A n_B \n')
-        for cl in clusters:
-            cluster_info = np.array(S_comb_all[S_comb_all['cluster']==cl].mean().values).astype('str')
-            n_models = len(S_comb_all[S_comb_all['cluster']==cl])
-            n_A = len(S_comb_all[(S_comb_all['cluster']==cl) & (S_comb_all['half']=='A')])
-            n_B = len(S_comb_all[(S_comb_all['cluster']==cl) & (S_comb_all['half']=='B')])
-            out.write(' '.join(cluster_info.astype('str'))+' '+str(n_models)+' '+str(n_A)+' '+str(n_B) +'\n')
-            print('Cluster number, number of models: ', cl, n_models)
-        out.close()
+    
+        aggregation = {v:'mean' for v in S_comb_all.columns.values if v not in ['half','cluster']}
+        aggregation.update({'cluster':  'count',
+                            'half': lambda x: len(x[x=='A'])})
+       
+        S_clusters = S_comb_all.groupby('cluster').agg(aggregation)
+        S_clusters = S_clusters.rename({'cluster':'N_models', 'half':'N_A'}, axis="columns")
+        S_clusters['N_B'] =  S_clusters['N_models']- S_clusters['N_A']
+        S_clusters = S_clusters.sort_values('Total_Score')
+        print(S_clusters)
 
+        # Selection criteria: lowest total score with at least 20-80 split
+        for i, row in S_clusters.iterrows():
+            if 1.0 - (row['N_models']-row['N_A'])/row['N_models'] >=0.2:
+                self.Sampling['N_selected'] = row['N_models']
+                self.Sampling['N_sample_A'] = row['N_A']
+                self.Sampling['N_sample_B'] = row['N_B']
+                break
+
+    
+        # Save file
+        S_clusters.to_csv(self.analysis_dir+'summary_hdbscan_clustering.dat', index=False)
+        print('----------------')
+        for k,v in self.Sampling.items():
+            print(k,v)
+        
     def plot_hdbscan_runs_info(self, S_comb):
         '''
         Plot the number of models that come from each run
@@ -1219,7 +1251,31 @@ class AnalysisTrajectories(object):
         else:
             stats_XLs.to_csv(self.analysis_dir+'XLs_satisfaction_cluster_'+str(cluster)+'.csv')
             dXLs_cluster.to_csv(self.analysis_dir+'XLs_distances_cluster_'+str(cluster)+'.csv')
-         
+
+    def summarize_sampling_info(self):
+
+        self.Sampling['Number_of_replicas'] = list(set(self.Sampling['Number_of_replicas']))[0]
+        self.Sampling['N_total'] = np.sum(self.Sampling['N_total'])
+        self.Sampling['N_equilibrated'] = np.sum(self.Sampling['N_equilibrated'])
+        self.Sampling['Replica_exchange_temperature_range'] = '1.0-3.0'
+
+        print('---------')
+        for k,v in self.Sampling.items():
+            print(k, v)
+
+        DS = pd.Series(self.Sampling.values(), index = self.Sampling.keys())
+        print(DS)
+            
+        DS.to_csv(self.analysis_dir+'/summary_sampling_information.csv', index=True)
+
+    def summarize_fit_to_information(self):
+
+        return 0
+
+    def update_mmcif(self, mmcif_file):
+
+        return 0
+    
     def plot_XLs_satisfaction(self, S_info, ts_max, file_out):
         
         c = ['gold', 'orange', 'red', 'blue', 'green']
