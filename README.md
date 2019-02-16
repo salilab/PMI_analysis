@@ -1,4 +1,4 @@
-These scripts are used to analyze a series of trajactories, look at their scores, determine when each score has equilibrated, and select models for further analysis. Sample scrips are in the *example* folder. These scripts assume that you are a series of IMP runs named run_0, run_1, ...
+These scripts are used to analyze a series of trajectories, look at their scores, determine when each score has equilibrated, and select models for further analysis. Sample scrips are in the *example* folder. These scripts assume that you are a series of IMP runs named run_0, run_1, ...
 
 ## Dependencies:
 * multiprocessing
@@ -61,8 +61,7 @@ This will only analyze the scores (not any nuisances associated with it, or some
 AT.read_stat_files()
 ```
 
-In this step we also automatically determine the quilibration time for each restraint and nuisance particle. Only models after equilibration are considered for further analysis.
-
+In this step we also automatically determine the equilibration time for each restraint and nuisance particles. Only models after equilibration are considered for further analysis.
 
 Reference for equilibration detection:
 
