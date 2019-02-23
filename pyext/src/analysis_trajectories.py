@@ -59,7 +59,6 @@ class AnalysisTrajectories(object):
         # Global sampling parameters
         self.Sampling = self.manager.dict()
         s_vals = ['Number_of_replicas', 
-                  'Replica_exchange_temperature_range',
                   'N_equilibrated',
                   'N_total']
  
@@ -606,8 +605,10 @@ class AnalysisTrajectories(object):
                 axes[i].set_ylabel('Score (a.u.)',fontsize=12)
         
         for i, c in enumerate(selected_scores.columns.values[1:]):
-            axes[i+n_res].hist(selected_scores[c].loc[ts_eq[i]::10], n_bins, histtype='step',fill=False, color='orangered',alpha=0.9)
-            axes[i+n_res].hist(selected_scores[c].loc[ts_max::10], n_bins, histtype='step',fill=False, color='gold',alpha=0.9)
+            axes[i+n_res].hist(selected_scores[c].loc[ts_eq[i]::10],
+                               n_bins, histtype='step',fill=False, color='orangered',alpha=0.9)
+            axes[i+n_res].hist(selected_scores[c].loc[ts_max::10],
+                               n_bins, histtype='step',fill=False, color='gold',alpha=0.9)
             axes[i+n_res].set_xlabel('Score (a.u.)',fontsize=12)
             if i == 0:
                 axes[i+n_res].set_ylabel('Density',fontsize=12)
@@ -721,7 +722,7 @@ class AnalysisTrajectories(object):
                             'half': lambda x: len(x[x=='A'])})
        
         S_clusters = S_comb_all.groupby('cluster').agg(aggregation)
-        S_clusters = S_clusters.rename({'cluster':'N_models', 'half':'N_A'}, axis="columns")
+        S_clusters.rename(columns = {'cluster': 'N_models', 'half':'N_A'}, inplace=True)
         S_clusters['N_B'] =  S_clusters['N_models']- S_clusters['N_A']
         S_clusters = S_clusters.sort_values('Total_Score')
         print(S_clusters)
@@ -733,13 +734,10 @@ class AnalysisTrajectories(object):
                 self.Sampling['N_sample_A'] = row['N_A']
                 self.Sampling['N_sample_B'] = row['N_B']
                 break
-
-    
+            
         # Save file
         S_clusters.to_csv(self.analysis_dir+'summary_hdbscan_clustering.dat', index=False)
-        print('----------------')
-        for k,v in self.Sampling.items():
-            print(k,v)
+        
         
     def plot_hdbscan_runs_info(self, S_comb):
         '''
@@ -822,52 +820,29 @@ class AnalysisTrajectories(object):
         clus_sel = 0
         for cl in clusters:
             HH_cluster = S_comb[S_comb['cluster'] == cl]
+            HH_cluster['frame_RMF3'] = HH_cluster.apply(lambda row: 'h1_'+row.traj+'_'+str(int(row.MC_frame))+'.rmf3 ' if row.half == 'A'
+                                                        else 'h2_'+row.traj+'_'+str(int(row.MC_frame))+'.rmf3 ', axis = 1)
+            
             # Select two-halves
             HA = HH_cluster[(HH_cluster['half']=='A')]
             HB = HH_cluster[(HH_cluster['half']=='B')]
+
             if len(HA['half'].values) >= 10 and len(HB['half'].values) >= 10:
                 clus_sel += 1
                 n = self.plot_scores_distributions(HA, HB, cl)
             
-                out_A = open(self.analysis_dir+'selected_models_A_cluster'+str(cl)+'.dat', 'w')
-                out_B = open(self.analysis_dir+'selected_models_B_cluster'+str(cl)+'.dat', 'w')
-                for row in HH_cluster.itertuples():
-                    if row.half=='A':
-                        out_A.write('h1_'+row.traj+'_'+str(int(row.MC_frame))+'.rmf3 \n')
-                    if row.half=='B':
-                        out_B.write('h2_'+row.traj+'_'+str(int(row.MC_frame))+'.rmf3 \n')
-
-                out_A.close()
-                out_B.close()
-
-                out_A_det = open(self.analysis_dir+'selected_models_A_cluster'+str(cl)+'_detailed.dat', 'w')
-                out_B_det = open(self.analysis_dir+'selected_models_B_cluster'+str(cl)+'_detailed.dat', 'w')
-                for row in HH_cluster.itertuples():
-                    if row.half=='A':
-                        out_A_det.write('h1_'+row.traj+'_'+str(int(row.MC_frame))+'.rmf3 '+row.traj+' '+row.rmf3_file+' '+str(int(row.MC_frame))+' '+str(int(row.rmf_frame_index))+'\n')
-                    if row.half=='B':
-                        out_B_det.write('h2_'+row.traj+'_'+str(int(row.MC_frame))+'.rmf3 '+row.traj+' '+row.rmf3_file+' '+str(int(row.MC_frame))+' '+str(int(row.rmf_frame_index))+'\n')
-
-                out_A_det.close()
-                out_B_det.close()
-
                 # Write to csv
                 HA.to_csv(self.analysis_dir+'selected_models_A_cluster'+str(cl)+'_detailed.csv')
                 HB.to_csv(self.analysis_dir+'selected_models_B_cluster'+str(cl)+'_detailed.csv')
 
                 # Select n model from
-                if int(n) < 30000 and len(HH_cluster) < 30000:
-                    HH_sel = HH_cluster
-                    HH_sel_A = HH_sel[(HH_sel['half']=='A')]
-                    HH_sel_B = HH_sel[(HH_sel['half']=='B')]
-                else:
+                if int(n) > 30000 and len(HH_cluster) > 30000:
                     HH_sel = HH_cluster.sample(n=29999)
                     HH_sel_A = HH_sel[(HH_sel['half']=='A')]
                     HH_sel_B = HH_sel[(HH_sel['half']=='B')]
-                    
-                HH_sel_A.to_csv(self.analysis_dir+'selected_models_A_cluster'+str(cl)+'_random.csv')
-                HH_sel_B.to_csv(self.analysis_dir+'selected_models_B_cluster'+str(cl)+'_random.csv')
-                
+                    HH_sel_A.to_csv(self.analysis_dir+'selected_models_A_cluster'+str(cl)+'_detailed_random.csv')
+                    HH_sel_B.to_csv(self.analysis_dir+'selected_models_B_cluster'+str(cl)+'_detailed_random.csv')
+                     
         if clus_sel == 0:
             print('WARNING: No models were selected because the simulations are not converged.')
                 
@@ -1087,7 +1062,7 @@ class AnalysisTrajectories(object):
                         xls_ids[id] = [xl]
         return xls_ids
 
-    def get_Psi_stats(self):
+    def get_psi_stats(self):
         '''
         Organize Psi values into DataFrame
         Get mean value for extracting models 
@@ -1253,20 +1228,22 @@ class AnalysisTrajectories(object):
             dXLs_cluster.to_csv(self.analysis_dir+'XLs_distances_cluster_'+str(cluster)+'.csv')
 
     def summarize_sampling_info(self):
+        '''
+        Save information regarding number of models
+        for output table
+        '''
+        
 
         self.Sampling['Number_of_replicas'] = list(set(self.Sampling['Number_of_replicas']))[0]
         self.Sampling['N_total'] = np.sum(self.Sampling['N_total'])
         self.Sampling['N_equilibrated'] = np.sum(self.Sampling['N_equilibrated'])
-        self.Sampling['Replica_exchange_temperature_range'] = '1.0-3.0'
+        #self.Sampling['Replica_exchange_temperature_range'] = '1.0-3.0'
 
-        print('---------')
+        DS = pd.DataFrame()
         for k,v in self.Sampling.items():
-            print(k, v)
-
-        DS = pd.Series(self.Sampling.values(), index = self.Sampling.keys())
-        print(DS)
+            DS[k] = [v]
             
-        DS.to_csv(self.analysis_dir+'/summary_sampling_information.csv', index=True)
+        DS.to_csv(self.analysis_dir+'/summary_sampling_information.csv', index=False)
 
     def summarize_fit_to_information(self):
 
