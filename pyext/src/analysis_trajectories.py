@@ -562,11 +562,14 @@ class AnalysisTrajectories(object):
                                                                                                  
             # Add half info
             if out in self.dir_halfA:
-                S_tot_scores = S_tot_scores.assign(half = pd.Series(['A']*len(S_tot_scores), index=S_tot_scores.index).values)
+                S_tot_scores = S_tot_scores.assign(half = pd.Series(['A']*len(S_tot_scores),
+                                                                    index=S_tot_scores.index).values)
             elif out in self.dir_halfB:
-                S_tot_scores = S_tot_scores.assign(half = pd.Series(['B']*len(S_tot_scores), index=S_tot_scores.index).values)
+                S_tot_scores = S_tot_scores.assign(half = pd.Series(['B']*len(S_tot_scores),
+                                                                    index=S_tot_scores.index).values)
             else:
-                S_tot_scores = S_tot_scores.assign(half = pd.Series([0]*len(S_tot_scores), index=S_tot_scores.index).values)
+                S_tot_scores = S_tot_scores.assign(half = pd.Series([0]*len(S_tot_scores),
+                                                                    index=S_tot_scores.index).values)
 
             # Collect distances and nuisances information
 
@@ -624,13 +627,17 @@ class AnalysisTrajectories(object):
        
         for k, T in self.S_all.items():
             kk = k.split(self.dir_name)[-1].split('/')[0]
-            T.to_csv(self.analysis_dir+'all_info_'+str(kk)+'.csv')
+            T.to_csv(self.analysis_dir+'scores_info_'+str(kk)+'.csv')
+            
+        for k in self.S_dist_all.keys():
+            T = self.S_dist_all[k]
+            kk = k.split(self.dir_name)[-1].split('/')[0]
+            T.to_csv(self.analysis_dir+'XLs_dist_info_'+str(kk)+'.csv')
 
-        if self.XLs_restraint == True:
-            for k in self.S_dist_all.keys():
-                T = self.S_dist_all[k]
-                kk = k.split(self.dir_name)[-1].split('/')[0]
-                T.to_csv(self.analysis_dir+'XLs_info_'+str(kk)+'.csv')
+        for k in self.S_info_all.keys():
+            T = self.S_info_all[k]
+            kk = k.split(self.dir_name)[-1].split('/')[0]
+            T.to_csv(self.analysis_dir+'other_info_'+str(kk)+'.csv')
         
     def read_models_info(self, XLs_cutoffs= None):
         '''
@@ -718,15 +725,15 @@ class AnalysisTrajectories(object):
         '''
     
         aggregation = {v:'mean' for v in S_comb_all.columns.values if v not in ['half','cluster']}
-        aggregation.update({'cluster':  'count',
+        aggregation.update({'cluster':  lambda x: x.sum(),
                             'half': lambda x: len(x[x=='A'])})
-       
+
         S_clusters = S_comb_all.groupby('cluster').agg(aggregation)
-        S_clusters.rename(columns = {'cluster': 'N_models', 'half':'N_A'}, inplace=True)
+        S_clusters.rename(columns = {'cluster': 'N_models',
+                                     'half':'N_A'}, inplace=True)
         S_clusters['N_B'] =  S_clusters['N_models']- S_clusters['N_A']
         S_clusters = S_clusters.sort_values('Total_Score')
-        print(S_clusters)
-
+        
         # Selection criteria: lowest total score with at least 20-80 split
         for i, row in S_clusters.iterrows():
             if 1.0 - (row['N_models']-row['N_A'])/row['N_models'] >=0.2:
@@ -736,8 +743,12 @@ class AnalysisTrajectories(object):
                 break
             
         # Save file
-        S_clusters.to_csv(self.analysis_dir+'summary_hdbscan_clustering.dat', index=False)
-        
+        columns = ['Total_Score'] + \
+                  [x for x in S_clusters.columns.values if x not in ['cluster','Total_Score','N_models','N_A','N_B']] + \
+                  ['N_models','N_A','N_B']
+        S_clusters = S_clusters[columns]
+        S_clusters.to_csv(self.analysis_dir+'summary_hdbscan_clustering.dat', index=True)
+        print(S_clusters)
         
     def plot_hdbscan_runs_info(self, S_comb):
         '''
@@ -816,12 +827,13 @@ class AnalysisTrajectories(object):
         print('Selecting and writing models to extract ...')
         clusters = list(set(S_comb['cluster']))
         clusters = [cl for cl in clusters if cl >=0]
+
+        S_comb.loc[:,'frame_RMF3'] = S_comb.apply(lambda row: 'h1_'+row.traj+'_'+str(int(row.MC_frame))+'.rmf3' if row.half == 'A'
+                                                  else 'h2_'+row.traj+'_'+str(int(row.MC_frame))+'.rmf3', axis = 1)
         
         clus_sel = 0
         for cl in clusters:
             HH_cluster = S_comb[S_comb['cluster'] == cl]
-            HH_cluster['frame_RMF3'] = HH_cluster.apply(lambda row: 'h1_'+row.traj+'_'+str(int(row.MC_frame))+'.rmf3 ' if row.half == 'A'
-                                                        else 'h2_'+row.traj+'_'+str(int(row.MC_frame))+'.rmf3 ', axis = 1)
             
             # Select two-halves
             HA = HH_cluster[(HH_cluster['half']=='A')]
@@ -836,7 +848,8 @@ class AnalysisTrajectories(object):
                 HB.to_csv(self.analysis_dir+'selected_models_B_cluster'+str(cl)+'_detailed.csv')
 
                 # Select n model from
-                if int(n) > 30000 and len(HH_cluster) > 30000:
+                print('LENNNN----', len(HH_cluster), n)
+                if int(n) > 30000  or len(HH_cluster) > 30000:
                     HH_sel = HH_cluster.sample(n=29999)
                     HH_sel_A = HH_sel[(HH_sel['half']=='A')]
                     HH_sel_B = HH_sel[(HH_sel['half']=='B')]
