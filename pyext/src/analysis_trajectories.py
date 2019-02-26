@@ -725,10 +725,11 @@ class AnalysisTrajectories(object):
         '''
     
         aggregation = {v:'mean' for v in S_comb_all.columns.values if v not in ['half','cluster']}
-        aggregation.update({'cluster':  lambda x: x.sum(),
+        aggregation.update({'cluster':  lambda x: len(x),
                             'half': lambda x: len(x[x=='A'])})
 
         S_clusters = S_comb_all.groupby('cluster').agg(aggregation)
+        
         S_clusters.rename(columns = {'cluster': 'N_models',
                                      'half':'N_A'}, inplace=True)
         S_clusters['N_B'] =  S_clusters['N_models']- S_clusters['N_A']
@@ -748,6 +749,7 @@ class AnalysisTrajectories(object):
                   ['N_models','N_A','N_B']
         S_clusters = S_clusters[columns]
         S_clusters.to_csv(self.analysis_dir+'summary_hdbscan_clustering.dat', index=True)
+        print('Clustering summary: ')
         print(S_clusters)
         
     def plot_hdbscan_runs_info(self, S_comb):
@@ -848,7 +850,6 @@ class AnalysisTrajectories(object):
                 HB.to_csv(self.analysis_dir+'selected_models_B_cluster'+str(cl)+'_detailed.csv')
 
                 # Select n model from
-                print('LENNNN----', len(HH_cluster), n)
                 if int(n) > 30000  or len(HH_cluster) > 30000:
                     HH_sel = HH_cluster.sample(n=29999)
                     HH_sel_A = HH_sel[(HH_sel['half']=='A')]
@@ -860,7 +861,6 @@ class AnalysisTrajectories(object):
             print('WARNING: No models were selected because the simulations are not converged.')
                 
     def plot_hdbscan_clustering(self, S_comb_sel, selected_scores):
-
         print('Generating HDBSCAN clustering plot ...')
         num_sel = len(S_comb_sel)-2
 
