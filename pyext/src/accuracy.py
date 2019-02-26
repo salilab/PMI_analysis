@@ -51,7 +51,6 @@ class AccuracyModels(object):
         n_clusters = len(clusters)
         print(clusters, self.clustering_dir)
 
-        self.all_accu = {}
         for cl in clusters:
             print('cl', cl)
             cl_number = cl.split('.')[-3]
@@ -74,7 +73,8 @@ class AccuracyModels(object):
             output = mp.Queue()
         
             # Setup a list of processes that we want to run
-            processes = [mp.Process(target=self.accuracy_rmfs, args=(rmfs_dict[x], cl_accu)) for x in range(nproc)]
+            processes = [mp.Process(target=self.accuracy_rmfs,
+                                    args=(rmfs_dict[x], cl_accu)) for x in range(nproc)]
 
             # Run processes
             for p in processes:
@@ -146,11 +146,10 @@ class AccuracyModels(object):
         out_summary.close()
 
     def plot_accuracy_histograms(self):
-        """
-        Plot all clusters accuracy distribution.
-        Only cluster0 is shown in orange. All other
-        clusters are shown in grey.
-        """
+        '''
+        Plot accuracy distribution for all clusters.
+        Only cluster0 is shown in orange
+        '''
 
         colors = ['gold','dodgerblue','forestgreen','palegreen','darkviolet','darkblue']
         n_bins = 10
