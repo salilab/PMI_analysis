@@ -26,14 +26,18 @@ mpl.rcParams.update({'font.size': 8})
 
 class ValidationModels(object):
     def __init__(self,
+                 analysis_dir,
                  clustering_dir,
                  scores_sample_A,
-                 scores_sample_B):
+                 scores_sample_B,
+                 XLs_cutoffs):
 
+        self.analysis_dir = analysis_dir
         self.clustering_dir = clustering_dir
         self.scores_sample_A = scores_sample_A
         self.scores_sample_B = scores_sample_B
-        
+        self.XLs_cutoffs = XLs_cutoffs        
+
         self.manager = mp.Manager()
         
         self.read_scores_files()
@@ -52,9 +56,9 @@ class ValidationModels(object):
         # Read identities of models in each cluster
         ids_file_A = pd.read_csv(self.clustering_dir+'/Identities_A.txt', sep=' ', names=['model','id'])
         ids_file_B = pd.read_csv(self.clustering_dir+'/Identities_B.txt', sep=' ', names=['model','id'])
-
-        ids_file_A['file_name'] = ids_file_A['rmf3_file'].apply(lambda model: model.split('/')[-1])
-        ids_file_B['file_name'] = ids_file_B['rmf3_file'].apply(lambda model: model.split('/')[-1])
+        
+        ids_file_A['file_name'] = ids_file_A['model'].apply(lambda model: model.split('/')[-1])
+        ids_file_B['file_name'] = ids_file_B['model'].apply(lambda model: model.split('/')[-1])
         ids_file_A['half'] = 'A'
         ids_file_B['half'] = 'B'
         
@@ -63,8 +67,6 @@ class ValidationModels(object):
         self.DC['MC_frame'] = np.nan
         self.DC['cluster'] = np.nan
 
-        print(self.DC.head())
-        
     def read_clusters(self):
         '''
         Get all rmf3 files in clusters
@@ -72,16 +74,13 @@ class ValidationModels(object):
     
         self.cluster_rmfs = {}
 
-        clusters = glob.glob(self.clustering_dir+'/cluster.*.all.txt').sort()
-        self.n_cluster = len(clusters)
-        for n, cl in enumerate(clusters):
-            print(n, cl)
-            with open(cluster) as fh:
-                ids = f.readlines()
-            print(ids)
-            self.DC[self.DC[id].isin(ids)]['cluster'] = n
+        clusters = np.sort(glob.glob(self.clustering_dir+'/cluster.*.all.txt'))
+        self.n_clusters = len(clusters)
+        for n, cluster in enumerate(clusters):
+            ids = pd.read_csv(cluster,names=['id'])
+            v = ids['id'].values
+            self.DC.loc[self.DC['id'].isin(v),'cluster'] = int(n)
             
-        print(self.DC.head())
             
     def read_clustered_models(self):
         '''
@@ -92,20 +91,17 @@ class ValidationModels(object):
         score_fields = [s for s in self.S.columns.values if 'sum' in s]
         self.sel_frames = {}
         
-        for n range(self.n_clusters):
+        for n in range(self.n_clusters):
             max_scores = {s: [0.0,''] for s in score_fields}
 
             frames = self.DC[self.DC['cluster']==n]['file_name']
-            print(frames.head())
             
             idx = pd.Index(self.S['frame_RMF3']).get_indexer(frames.values)
 
             info_scores = self.S.iloc[idx]
-                
-            self.DC[self.DC['cluster']==n]['traj'] = info_scores['traj'].values
-            self.DC[self.DC['cluster']==n]['MC_frame'] = info_scores['MC_frame'].values
-            
-            print(self.DC.head())
+ 
+            self.DC.loc[self.DC['cluster']==n,'traj'] = info_scores['traj'].values
+            self.DC.loc[self.DC['cluster']==n,'MC_frame'] = info_scores['MC_frame'].values
 
             for s in score_fields:
                 m = info_scores[s].max()
@@ -113,9 +109,20 @@ class ValidationModels(object):
                 max_scores[s] = [m,f]
                 
             self.sel_frames[n] = max_scores
+        
+    def get_excluded_volume_satisfaction(self):
 
-        print(self.sel_frames)
-                
+        sEV = pd.DataFrame(columns = ['cluster','EV_satisfaction'])
+
+        for n in range(self.n_clusters):
+            rmf3_file = self.sel_frames[n]['EV_sum'][1]
+            rmf3_full = self.DC[self.DC['file_name']==rmf3_file]['model'].values[0]
+            s = self.excluded_volume_satisfaction(rmf3_full)
+            sEV.loc[n] = [n, s]
+
+        sEV.to_csv(self.clustering_dir+'EV_validation_summary.csv', index=False)
+        
+        
     def excluded_volume_satisfaction(self,
                                      rmf3_file,
                                      resolution=10):
@@ -125,8 +132,7 @@ class ValidationModels(object):
         '''
 
         kappa = 1.0
-        
-    
+         
         m = IMP.Model()
         hier = IMP.pmi.analysis.get_hiers_from_rmf(m,0,rmf3_file)
         
@@ -149,7 +155,6 @@ class ValidationModels(object):
 
         viol = [v for v in D if v < -kappa]
 
-        print(100.*(1-len(viol)/float(len(D))))
 
         return round(100.*(1-len(viol)/float(len(D))),2)
         
@@ -161,24 +166,28 @@ class ValidationModels(object):
 
     def get_XLs_distances(self):
 
-       self.XLs_dist_clusters = {} 
+        self.XLs_dist_clusters = {} 
         
         for n in range(self.n_clusters):
             dist_all = pd.DataFrame()
             sel_cluster = self.DC[self.DC['cluster']==n]
             trajs =  sel_cluster['traj'].apply(lambda x: x.split('run_')[1]).unique()
-            for t in traj:
-                frames = self_cluster['MC_frame']
-                dist = pd.read_csv(self.analys_dir+'/XLs_dist_info_'+str(t)+'.csv')
+            for t in trajs:
+                frames = sel_cluster[sel_cluster['traj']=='run_'+t]['MC_frame']
+                dist = pd.read_csv(self.analysis_dir+'/XLs_dist_info_'+str(t)+'.csv')
+                dist_cluster = dist[dist['MC_frame'].isin(frames)]
                 if not dist_all.empty:
-                    dist_all.append(dist)
+                    dist_all.append(dist_cluster)
                 else:
-                    dist_all = dist
+                    dist_all = dist_cluster
 
             self.XLs_dist_clusters[n] = dist_all
                     
 
-    def summarize_XLs_info(self):
+    def get_XLs_satisfaction(self):
+
+        self.get_XLs_distances()
+        self.Multiple_XLs_restraints = None
 
         if self.Multiple_XLs_restraints:
             columns = ['cluster'] + \
@@ -187,35 +196,35 @@ class ValidationModels(object):
         else:
             columns = ['cluster','ensemble_satisfaction','average_frame_satisfaction']
         
-        sXLs = pd.DataFrame(names = columns)
+        sXLs = pd.DataFrame(columns = columns)
         
         for n in range(self.n_clusters):
             l = [n]
             if self.Multiple_XLs_restraints:
                 for type_XLs in self.XLs_cutoffs.keys():
                     cutoff = self.XLs_cutoffs[type_XLs]
-                    ensemble, ave = get_XLs_statistics(self,
-                                                       cluster=n,
-                                                       type_XLs = type_XLs,
-                                                       cutoff=cutoff)
+                    ensemble, ave = XLs_statistics(self,
+                                                   cluster=n,
+                                                   type_XLs = type_XLs,
+                                                   cutoff=cutoff)
                     l = l + [ensemble+ave]
                 sXLs.iloc[n] = l
                     
             else:
                 cutoff = list(self.XLs_cutoffs.values())[0]
-                ensemble, ave = self.get_XLs_details(cluster = cl,
-                                                      cutoff=cutoff)
-                sXLs.iloc[n] = [n, ensemble, ave]
+                ensemble, ave = self.XLs_statistics(cluster = n,
+                                                    cutoff=cutoff)
+                sXLs.loc[n] = [n, ensemble, ave]
 
-        sXLs.to_csv(self.clustering_dir+'XLs_validation_summary.csv')
+        sXLs.to_csv(self.clustering_dir+'XLs_validation_summary.csv',index=False)
             
         
-    def get_XLs_statistics(self, cluster=0, type_XLs = None, cutoff=30.):
+    def XLs_statistics(self, cluster=0, type_XLs = None, cutoff=30.):
         '''
         For each cluster, determine for each XLs, how often it is satisfied.
         '''
         
-        XLs_cluster =  self.XLs_dist_clusters[n]
+        XLs_cluster =  self.XLs_dist_clusters[cluster]
         
         if type_XLs:
             dist_columns = [v for v in XLs_cluster.columns.values if 'Distance' in v and type_XLs in v]
@@ -243,9 +252,10 @@ class ValidationModels(object):
             dXLs_cluster.to_csv(self.clustering_dir+'XLs_distances_cluster_'+str(cluster)+'.csv')
 
         # Now compute the frame and ensemble satisfaction
-        ensemble = dXLs_cluster.apply(lambda x: float(len(x[x>cutoff]))/len(x)) ,axis=0).sum()
+        min_ensemble = dXLs_cluster.apply(lambda x: min(x), axis=0)
+        ensemble = len(min_ensemble[min_ensemble<cutoff])/float(len(min_ensemble))
         ave = dXLs_cluster.apply(lambda x: float(len(x[x<cutoff]))/len(x) ,axis=1).mean()
-        
+            
         return ensemble, ave
             
     def XLs_satisfaction_from_dataset(self, XLs_dataset = None):
@@ -263,27 +273,30 @@ class ValidationModels(object):
             info_all = pd.DataFrame()
             sel_cluster = self.DC[self.DC['cluster']==n]
             trajs =  sel_cluster['traj'].apply(lambda x: x.split('run_')[1]).unique()
-            for t in traj:
-                frames = self_cluster['MC_frame']
-                info = pd.read_csv(self.analys_dir+'/other_info_'+str(t)+'.csv')
+            for t in trajs:
+                frames = sel_cluster[sel_cluster['traj']=='run_'+t]['MC_frame']
+                info = pd.read_csv(self.analysis_dir+'/other_info_'+str(t)+'.csv')
+                info_cluster = info[info['MC_frame'].isin(frames)]
                 if not info_all.empty:
-                    info_all.append(info)
+                    info_all.append(info_cluster)
                 else:
-                    info_all = info
+                    info_all = info_cluster
 
             self.info_clusters[n] = info_all
     
-    def pEMAP_satisfaction(self):
+    def get_pEMAP_satisfaction(self):
 
-        sPEMAP = pd.DataFrame(names = ['cluster','pEMAP_satisfaction', 'pEMAP_sigma'])
+        self.get_clusters_info()
+
+        sPEMAP = pd.DataFrame(columns = ['cluster','pEMAP_satisfaction', 'pEMAP_sigma'])
         
         for n in range(self.n_clusters):
             m = self.info_clusters[n]['pEMapRestraint_satisfaction'].mean()
             sigma = self.info_clusters[n]['pEMapRestraint_sigma_0'].mean()
 
-            sPEMAP.iloc[n] = [n, m, sigma]
+            sPEMAP.loc[n] = [n, m, sigma]
 
-        sPEMAP.to_csv(self.clustering_dir+'pEMAP_validation_summary.csv')
+        sPEMAP.to_csv(self.clustering_dir+'pEMAP_validation_summary.csv', index=False)
 
     def EM3D_satisfaction(self):
 
