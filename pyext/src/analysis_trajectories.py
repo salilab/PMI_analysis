@@ -649,14 +649,15 @@ class AnalysisTrajectories(object):
             self.XLs_cutoffs = XLs_cutoffs        
 
         # Score files
-        info_files = glob.glob(self.analysis_dir+'all_info_*.csv')
+        info_files = glob.glob(self.analysis_dir+'scores_info_*.csv')
         for f in info_files:
+            print(f)
             k = f.split('all_info_')[-1].split('.csv')[0]
             df = pd.read_csv(f)
             self.S_all[k] = df
 
         # XLs files
-        xls_files = glob.glob(self.analysis_dir+'XLs_info_*.csv')
+        xls_files = glob.glob(self.analysis_dir+'XLs_dist_info_*.csv')
         if len(xls_files)>0:
             self.XLs_restraint = True
             self.ambiguous_XLs_restraint = False
@@ -770,7 +771,9 @@ class AnalysisTrajectories(object):
         # Count models per-run
         clusters = list(set(S_comb['cluster']))
         clusters = [cl for cl in clusters if cl >=0]
-        
+        if len(clusters) ==0 :
+            clusters = [-1]       
+
         clus_sel = 0
         for cl in clusters:
             counts_traj_A = pd.DataFrame(columns=['traj','counts_A'])
@@ -829,6 +832,9 @@ class AnalysisTrajectories(object):
         print('Selecting and writing models to extract ...')
         clusters = list(set(S_comb['cluster']))
         clusters = [cl for cl in clusters if cl >=0]
+
+        if len(clusters) == 0:
+            clusters = [-1]
 
         S_comb.loc[:,'frame_RMF3'] = S_comb.apply(lambda row: 'h1_'+row.traj+'_'+str(int(row.MC_frame))+'.rmf3' if row.half == 'A'
                                                   else 'h2_'+row.traj+'_'+str(int(row.MC_frame))+'.rmf3', axis = 1)
@@ -1193,14 +1199,14 @@ class AnalysisTrajectories(object):
         if self.Multiple_XLs_restraints:
             for type_XLs in self.XLs_cutoffs.keys():
                 cutoff = self.XLs_cutoffs[type_XLs]
-                for cl in unique_clusters[1:]:
+                for cl in unique_clusters:
                     # Boxplot XLs distances
                     self.boxplot_XLs_distances(cluster = cl, type_XLs = type_XLs, cutoff = cutoff)
                     # XLs satisfaction data
                     self.get_XLs_details(cluster = cl, type_XLs = type_XLs)
         else:
             cutoff = list(self.XLs_cutoffs.values())[0]
-            for cl in unique_clusters[1:]:
+            for cl in unique_clusters:
                 # Boxplot XLs distances
                 self.boxplot_XLs_distances(cluster = cl, cutoff = cutoff)
                 # XLs satisfaction data
