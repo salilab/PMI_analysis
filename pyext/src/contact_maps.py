@@ -318,8 +318,11 @@ class CMTable(object):
 					        pp2 = xl[2]
 					        r1 = int(xl[1])
 					        r2 = int(xl[3])
-                                                c = int(xl[4])
-                                                area = 1.5*c
+                                                if len(xl)==4:
+                                                        c = int(xl[4])
+                                                        area = 1.5*c
+                                                else:
+                                                        area = 20.
 					        if p1 == p2:
 						        if np.min(sXLs[xl]) < self.XLs_cutoff:
 							        ax.scatter(r1,r2,s=area, color='greenyellow',alpha=0.7, edgecolors='none')
@@ -366,7 +369,10 @@ class CMTable(object):
 	    for i, line in enumerate(open(data_file)):
 	        vals = line.split(',')
 		if i > 0:
-		    self.XL_dict[i] = [vals[0],vals[2],vals[1],vals[3],vals[5]]
+                        if len(vals)>4:
+		                self.XL_dict[i] = [vals[0],vals[2],vals[1],vals[3],vals[5]]
+                        else:
+                                self.XL_dict[i] = [vals[0],vals[2],vals[1],vals[3]]
 
         def get_XLs_distances(self, hier):
 		
