@@ -33,8 +33,9 @@ import hdbscan
 class AnalysisTrajectories(object):
     def __init__(self,
                  out_dirs,
-                 dir_name = 'run_', 
-                 analysis_dir = 'analys/',
+                 dir_name = 'run_',
+                 out_name = 'output',
+                 analysis_dir = 'analysis/',
                  nproc=6,
                  nskip=200):
 
@@ -48,6 +49,10 @@ class AnalysisTrajectories(object):
 
         self.th = 1000
         self.rerun = False
+
+        # Create analysis dir if missing
+        if not os.path.exists(self.analysis_dir):
+            os.makedirs(self.analysis_dir)
         
         # For multiprocessing
         self.manager = mp.Manager()
@@ -302,6 +307,7 @@ class AnalysisTrajectories(object):
 
     def get_keys(self, stat_file):
         ''' Get all keys in stat file '''
+        
         for line in open(stat_file).readlines():
             d = eval(line)
             klist = list(d.keys())
@@ -345,7 +351,8 @@ class AnalysisTrajectories(object):
         output = mp.Queue()
         
         # Setup a list of processes that we want to run
-        processes = [mp.Process(target=self.read_traj_info, args=((out_dirs_dict[x],))) for x in range(self.nproc)]
+        processes = [mp.Process(target=self.read_traj_info,
+                                args=((out_dirs_dict[x],))) for x in range(self.nproc)]
 
         # Run processes
         for p in processes:
@@ -617,7 +624,7 @@ class AnalysisTrajectories(object):
                 axes[i+n_res].set_ylabel('Density',fontsize=12)
 
         pl.tight_layout(pad=0.5, w_pad=0.1, h_pad=2.0)
-        fig.savefig(self.analysis_dir+file_out)
+        fig.savefig(os.path.join(self.analysis_dir,file_out))
         pl.close()
         
     def write_models_info(self):
@@ -627,17 +634,17 @@ class AnalysisTrajectories(object):
        
         for k, T in self.S_all.items():
             kk = k.split(self.dir_name)[-1].split('/')[0]
-            T.to_csv(self.analysis_dir+'scores_info_'+str(kk)+'.csv')
+            T.to_csv(os.path.join(os.path.join(self.analysis_dir,'scores_info_'+str(kk)+'.csv')))
             
         for k in self.S_dist_all.keys():
             T = self.S_dist_all[k]
             kk = k.split(self.dir_name)[-1].split('/')[0]
-            T.to_csv(self.analysis_dir+'XLs_dist_info_'+str(kk)+'.csv')
+            T.to_csv(os.path.join(os.path.join(self.analysis_dir,'XLs_dist_info_'+str(kk)+'.csv')))
 
         for k in self.S_info_all.keys():
             T = self.S_info_all[k]
             kk = k.split(self.dir_name)[-1].split('/')[0]
-            T.to_csv(self.analysis_dir+'other_info_'+str(kk)+'.csv')
+            T.to_csv(os.path.join(os.path.join(self.analysis_dir,'other_info_'+str(kk)+'.csv')))
         
     def read_models_info(self, XLs_cutoffs= None):
         '''
@@ -649,15 +656,14 @@ class AnalysisTrajectories(object):
             self.XLs_cutoffs = XLs_cutoffs        
 
         # Score files
-        info_files = glob.glob(self.analysis_dir+'scores_info_*.csv')
+        info_files = glob.glob(os.path.join(self.analysis_dir,'scores_info_*.csv'))
         for f in info_files:
-            print(f)
             k = f.split('all_info_')[-1].split('.csv')[0]
             df = pd.read_csv(f)
             self.S_all[k] = df
 
         # XLs files
-        xls_files = glob.glob(self.analysis_dir+'XLs_dist_info_*.csv')
+        xls_files = glob.glob(os.path.join(self.analysis_dir,'XLs_dist_info_*.csv'))
         if len(xls_files)>0:
             self.XLs_restraint = True
             self.ambiguous_XLs_restraint = False
@@ -706,7 +712,7 @@ class AnalysisTrajectories(object):
             S_comb_dist_clustering = pd.concat(all_dist_dfs, sort=False).iloc[::skip]
         
             S_comb_dist_clustering = S_comb_dist_clustering.assign(cluster = pd.Series(hdbsc.labels_,index=S_comb_dist_clustering.index).values)
-            S_comb_dist_clustering.to_csv(self.analysis_dir+'/XLs_clustering_info.csv', index=False)
+            S_comb_dist_clustering.to_csv(os.path.join(self.analysis_dir,'XLs_clustering_info.csv'), index=False)
             self.S_comb_dist_clustering = S_comb_dist_clustering
              
         print('Number of unique clusters: ', len(np.unique(hdbsc.labels_)), np.unique(hdbsc.labels_))
@@ -749,7 +755,7 @@ class AnalysisTrajectories(object):
                   [x for x in S_clusters.columns.values if x not in ['cluster','Total_Score','N_models','N_A','N_B']] + \
                   ['N_models','N_A','N_B']
         S_clusters = S_clusters[columns]
-        S_clusters.to_csv(self.analysis_dir+'summary_hdbscan_clustering.dat', index=True)
+        S_clusters.to_csv(os.path.join(self.analysis_dir,'summary_hdbscan_clustering.dat'), index=True)
         print('Clustering summary: ')
         print(S_clusters)
         
@@ -813,7 +819,7 @@ class AnalysisTrajectories(object):
                 axes[1].set_ylim([0,n_max])             
 
                 pl.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.5)
-                fig.savefig(self.analysis_dir+'plot_run_models_cluster'+str(cl)+'.pdf')
+                fig.savefig(os.path.join(self.analysis_dir,'plot_run_models_cluster'+str(cl)+'.pdf'))
                 pl.close()
         
     def write_hdbscan_clustering(self, S_comb):
@@ -824,8 +830,8 @@ class AnalysisTrajectories(object):
 
         # Remove files from previous runs
         try:
-            os.remove(self.analysis_dir+'selected_models_A_cluster*')
-            os.remove(self.analysis_dir+'selected_models_B_cluster*')
+            os.remove(os.path.join(self.analysis_dir,'selected_models_A_cluster*'))
+            os.remove(os.path.join(self.analysis_dir,'selected_models_B_cluster*'))
         except:
             pass
         
@@ -852,16 +858,16 @@ class AnalysisTrajectories(object):
                 n = self.plot_scores_distributions(HA, HB, cl)
             
                 # Write to csv
-                HA.to_csv(self.analysis_dir+'selected_models_A_cluster'+str(cl)+'_detailed.csv')
-                HB.to_csv(self.analysis_dir+'selected_models_B_cluster'+str(cl)+'_detailed.csv')
+                HA.to_csv(os.path.join(self.analysis_dir,'selected_models_A_cluster'+str(cl)+'_detailed.csv'))
+                HB.to_csv(os.path.join(self.analysis_dir,'selected_models_B_cluster'+str(cl)+'_detailed.csv'))
 
                 # Select n model from
                 if int(n) > 30000  or len(HH_cluster) > 30000:
                     HH_sel = HH_cluster.sample(n=29999)
                     HH_sel_A = HH_sel[(HH_sel['half']=='A')]
                     HH_sel_B = HH_sel[(HH_sel['half']=='B')]
-                    HH_sel_A.to_csv(self.analysis_dir+'selected_models_A_cluster'+str(cl)+'_detailed_random.csv')
-                    HH_sel_B.to_csv(self.analysis_dir+'selected_models_B_cluster'+str(cl)+'_detailed_random.csv')
+                    HH_sel_A.to_csv(os.path.join(self.analysis_dir,'selected_models_A_cluster'+str(cl)+'_detailed_random.csv'))
+                    HH_sel_B.to_csv(os.path.join(self.analysis_dir,'selected_models_B_cluster'+str(cl)+'_detailed_random.csv'))
                      
         if clus_sel == 0:
             print('WARNING: No models were selected because the simulations are not converged.')
@@ -901,7 +907,7 @@ class AnalysisTrajectories(object):
             
             
         pl.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
-        fig.savefig(self.analysis_dir+'plot_clustering_scores.png') 
+        fig.savefig(os.path.join(self.analysis_dir,'plot_clustering_scores.png')) 
         pl.close()
         
     def do_extract_models(self, gsms_info, filename, gsms_dir):
@@ -930,7 +936,7 @@ class AnalysisTrajectories(object):
     
     def write_GSMs_info(self, gsms_info, filename):
         restraint_cols = gsms_info.columns.values
-        gsms_info.to_csv(self.analysis_dir+filename, index=False)
+        gsms_info.to_csv(os.path.join(self.analysis_dir,filename), index=False)
 
     def get_models_to_extract(self, file):
         # Get models to extract from file
@@ -956,7 +962,8 @@ class AnalysisTrajectories(object):
             
             # Collect scores
             self.scores.append(row.Total_Score)
-            
+            #self.scores.append(row.Total_score)            
+
     def create_gsms_dir(self, dir):
         '''
         Create directories for GSM.
@@ -1039,7 +1046,7 @@ class AnalysisTrajectories(object):
         ax.set_title('Convergence of scores')
 
         pl.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.5)
-        fig.savefig(self.analysis_dir+'plot_scores_convergence_cluster'+str(cl)+'.pdf') 
+        fig.savefig(os.path.join(self.analysis_dir,'plot_scores_convergence_cluster'+str(cl)+'.pdf')) 
         pl.close()
 
         return n
@@ -1100,7 +1107,7 @@ class AnalysisTrajectories(object):
             sel_nuis_std = list(v[all_nuis].std())
             DF_stat_nuis = DF_stat_nuis.append(pd.Series([k]+sel_nuis_mean+sel_nuis_std, index = DF_stat_nuis.columns.values), ignore_index=True)
 
-        DF_stat_nuis.to_csv(self.analysis_dir+'Stat_all_nuisances.csv')
+        DF_stat_nuis.to_csv(os.path.join(self.analysis_dir,'Stat_all_nuisances.csv'))
                                         
     def analyze_trajectory_XLs(self, S_dist, S_info, atomic_XLs, traj_number, ts_max):
         
@@ -1177,9 +1184,9 @@ class AnalysisTrajectories(object):
                            ambiguous_XLs_restraint = False):
         # Remove files from previous runs
         try:
-            os.remove(self.analysis_dir+'plot_XLs_distances_*')
-            os.remove(self.analysis_dir+'XLs_satisfaction_cluster_*')
-            os.remove(self.analysis_dir+'XLs_distances_cluster_*')       
+            os.remove(os.path.join(self.analysis_dir,'plot_XLs_distances_*'))
+            os.remove(os.path.join(self.analysis_dir,'XLs_satisfaction_cluster_*'))
+            os.remove(os.path.join(self.analysis_dir,'XLs_distances_cluster_*'))       
         except:
             pass
         
@@ -1240,11 +1247,11 @@ class AnalysisTrajectories(object):
         stats_XLs['perc_satif'] = dXLs_cluster.apply(lambda x: float(len(x[x<cutoff]))/float(len(x)), axis = 0)
 
         if type_XLs:
-            stats_XLs.to_csv(self.analysis_dir+'XLs_satisfaction_'+type_XLs+'_cluster_'+str(cluster)+'.csv')
-            dXLs_cluster.to_csv(self.analysis_dir+'XLs_distances_'+type_XLs+'_cluster_'+str(cluster)+'.csv')
+            stats_XLs.to_csv(os.path.join(self.analysis_dir,'XLs_satisfaction_'+type_XLs+'_cluster_'+str(cluster)+'.csv'))
+            dXLs_cluster.to_csv(os.path.join(self.analysis_dir,'XLs_distances_'+type_XLs+'_cluster_'+str(cluster)+'.csv'))
         else:
-            stats_XLs.to_csv(self.analysis_dir+'XLs_satisfaction_cluster_'+str(cluster)+'.csv')
-            dXLs_cluster.to_csv(self.analysis_dir+'XLs_distances_cluster_'+str(cluster)+'.csv')
+            stats_XLs.to_csv(os.path.join(self.analysis_dir,'XLs_satisfaction_cluster_'+str(cluster)+'.csv'))
+            dXLs_cluster.to_csv(os.path.join(self.analysis_dir,'XLs_distances_cluster_'+str(cluster)+'.csv'))
 
     def summarize_sampling_info(self):
         '''
@@ -1262,7 +1269,7 @@ class AnalysisTrajectories(object):
         for k,v in self.Sampling.items():
             DS[k] = [v]
             
-        DS.to_csv(self.analysis_dir+'/summary_sampling_information.csv', index=False)
+        DS.to_csv(os.path.join(self.analysis_dir,'/summary_sampling_information.csv'), index=False)
 
     def summarize_fit_to_information(self):
 
@@ -1314,7 +1321,7 @@ class AnalysisTrajectories(object):
         ax[2].legend(handles[::-1], labels[::-1])
         
         pl.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.5)
-        fig.savefig(self.analysis_dir+file_out)
+        fig.savefig(os.path.join(self.analysis_dir,file_out))
         pl.close()
         
     def boxplot_XLs_distances(self, cluster = 0, type_XLs = None, cutoff = 30.0):
@@ -1386,7 +1393,7 @@ class AnalysisTrajectories(object):
             ax[i].set_title('XLs distance distributions')
 
         pl.tight_layout()
-        fig.savefig(self.analysis_dir+file_out)
+        fig.savefig(os.path.join(self.analysis_dir,file_out))
         pl.close()
 
         # Plot histogram of best cluster distances
@@ -1405,7 +1412,7 @@ class AnalysisTrajectories(object):
         ax.set_ylabel('Number of XLs')
         ax.set_title('XLs satisfaction')
         pl.tight_layout()
-        fig.savefig(self.analysis_dir+file_out_hist)
+        fig.savefig(os.path.join(self.analysis_dir,file_out_hist))
         pl.close()
         
     def plot_pEMAP_satisfaction(self, S_info, file_out):
@@ -1420,7 +1427,7 @@ class AnalysisTrajectories(object):
         ax.set_ylabel('Percent satisfied',fontsize=12)
         
         pl.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
-        fig.savefig(self.analysis_dir+file_out)
+        fig.savefig(os.path.join(self.analysis_dir,file_out))
         pl.close()
         
     def plot_Occams_satisfaction(self, Occams_info, file_out):
@@ -1467,7 +1474,7 @@ class AnalysisTrajectories(object):
         ax[2].legend(handles[::-1], labels[::-1])
         
         pl.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
-        fig.savefig(self.analysis_dir+file_out)
+        fig.savefig(os.path.join(self.analysis_dir,file_out))
         pl.close()
         
     def substrings(self, s):
