@@ -3,11 +3,15 @@ import IMP
 import IMP.pmi
 import IMP.pmi.analysis
 import IMP.pmi.output
+import IMP.pmi.tools
 import IMP.atom
 import glob
 import random
+import math
 import numpy as np
 import pandas as pd
+import itertools
+import os
 import sys
 import multiprocessing as mp
 
@@ -24,6 +28,8 @@ import matplotlib.colors as colors
 mpl.rcParams.update({'font.size': 8})
 
 
+import tools
+
 class ValidationModels(object):
     def __init__(self,
                  analysis_dir,
@@ -38,6 +44,8 @@ class ValidationModels(object):
         self.scores_sample_B = scores_sample_B
         self.XLs_cutoffs = XLs_cutoffs        
 
+        print(self.clustering_dir)
+
         self.manager = mp.Manager()
         
         self.read_scores_files()
@@ -51,11 +59,16 @@ class ValidationModels(object):
         S2 = pd.read_csv(self.scores_sample_B ,sep=',')
         self.S = pd.concat([S1,S2])
 
+        if 'frame_RMF3' not in self.S.columns:
+            self.S.loc[:,'frame_RMF3'] = self.S.apply(lambda row: 'h1_'+row.traj+'_'+str(int(row.MC_frame))+'.rmf3' if row.half == 'A'
+                                                      else 'h2_'+row.traj+'_'+str(int(row.MC_frame))+'.rmf3', axis = 1)
+            
+
     def read_identities(self):
         
         # Read identities of models in each cluster
-        ids_file_A = pd.read_csv(self.clustering_dir+'/Identities_A.txt', sep=' ', names=['model','id'])
-        ids_file_B = pd.read_csv(self.clustering_dir+'/Identities_B.txt', sep=' ', names=['model','id'])
+        ids_file_A = pd.read_csv(os.path.join(self.clustering_dir,'Identities_A.txt'), sep=' ', names=['model','id'])
+        ids_file_B = pd.read_csv(os.path.join(self.clustering_dir,'Identities_B.txt'), sep=' ', names=['model','id'])
         
         ids_file_A['file_name'] = ids_file_A['model'].apply(lambda model: model.split('/')[-1])
         ids_file_B['file_name'] = ids_file_B['model'].apply(lambda model: model.split('/')[-1])
@@ -73,8 +86,8 @@ class ValidationModels(object):
         '''
     
         self.cluster_rmfs = {}
-
-        clusters = np.sort(glob.glob(self.clustering_dir+'/cluster.*.all.txt'))
+        
+        clusters = np.sort(glob.glob(os.path.join(self.clustering_dir,'cluster.*.all.txt')))
         self.n_clusters = len(clusters)
         for n, cluster in enumerate(clusters):
             ids = pd.read_csv(cluster,names=['id'])
@@ -95,7 +108,10 @@ class ValidationModels(object):
             max_scores = {s: [0.0,''] for s in score_fields}
 
             frames = self.DC[self.DC['cluster']==n]['file_name']
-            
+            print(self.S.head())
+            for a in self.S.columns:
+                print(a)
+            print(self.S['rmf3_file'].head())
             idx = pd.Index(self.S['frame_RMF3']).get_indexer(frames.values)
 
             info_scores = self.S.iloc[idx]
@@ -120,7 +136,7 @@ class ValidationModels(object):
             s = self.excluded_volume_satisfaction(rmf3_full)
             sEV.loc[n] = [n, s]
 
-        sEV.to_csv(self.clustering_dir+'EV_validation_summary.csv', index=False)
+        sEV.to_csv(os.path.join(self.clustering_dir,'EV_validation_summary.csv'), index=False)
         
         
     def excluded_volume_satisfaction(self,
@@ -216,7 +232,7 @@ class ValidationModels(object):
                                                     cutoff=cutoff)
                 sXLs.loc[n] = [n, ensemble, ave]
 
-        sXLs.to_csv(self.clustering_dir+'XLs_validation_summary.csv',index=False)
+        sXLs.to_csv(os.path.join(self.clustering_dir,'XLs_validation_summary.csv'),index=False)
             
         
     def XLs_statistics(self, cluster=0, type_XLs = None, cutoff=30.):
@@ -245,11 +261,15 @@ class ValidationModels(object):
         stats_XLs['perc_satif'] = dXLs_cluster.apply(lambda x: float(len(x[x<cutoff]))/float(len(x)), axis = 0)
 
         if type_XLs:
-            stats_XLs.to_csv(self.clustering_dir+'XLs_satisfaction_'+type_XLs+'_cluster_'+str(cluster)+'.csv')
-            dXLs_cluster.to_csv(self.clustering_dir+'XLs_distances_'+type_XLs+'_cluster_'+str(cluster)+'.csv')
+            stats_XLs.to_csv(os.path.join(
+                self.clustering_dir,'XLs_satisfaction_'+type_XLs+'_cluster_'+str(cluster)+'.csv'))
+            dXLs_cluster.to_csv(os.path.join(
+                self.clustering_dir,'XLs_distances_'+type_XLs+'_cluster_'+str(cluster)+'.csv'))
         else:
-            stats_XLs.to_csv(self.clustering_dir+'XLs_satisfaction_cluster_'+str(cluster)+'.csv')
-            dXLs_cluster.to_csv(self.clustering_dir+'XLs_distances_cluster_'+str(cluster)+'.csv')
+            stats_XLs.to_csv(os.path.join(
+                self.clustering_dir,'/XLs_satisfaction_cluster_'+str(cluster)+'.csv'))
+            dXLs_cluster.to_csv(os.path.join(
+                self.clustering_dir,'/XLs_distances_cluster_'+str(cluster)+'.csv'))
 
         # Now compute the frame and ensemble satisfaction
         min_ensemble = dXLs_cluster.apply(lambda x: min(x), axis=0)
@@ -275,7 +295,8 @@ class ValidationModels(object):
             trajs =  sel_cluster['traj'].apply(lambda x: x.split('run_')[1]).unique()
             for t in trajs:
                 frames = sel_cluster[sel_cluster['traj']=='run_'+t]['MC_frame']
-                info = pd.read_csv(self.analysis_dir+'/other_info_'+str(t)+'.csv')
+                info = pd.read_csv(os.path.join(
+                    self.analysis_dir,'other_info_'+str(t)+'.csv'))
                 info_cluster = info[info['MC_frame'].isin(frames)]
                 if not info_all.empty:
                     info_all.append(info_cluster)
@@ -296,7 +317,125 @@ class ValidationModels(object):
 
             sPEMAP.loc[n] = [n, m, sigma]
 
-        sPEMAP.to_csv(self.clustering_dir+'pEMAP_validation_summary.csv', index=False)
+        sPEMAP.to_csv(os.path.join(
+            self.clustering_dir,'pEMAP_validation_summary.csv'), index=False)
+
+    def distance_implied_by_MIC(self, MIC_file, rmf):
+        k = -0.014744
+        n = -0.41
+        dists_MIC = []
+        
+        model = IMP.Model()
+        hier = IMP.pmi.analysis.get_hiers_from_rmf(model,0,rmf)[0] 
+        
+        # Check if residue pair is in representaiton
+        for i, row in self.MIC.iterrows():
+            s1 = IMP.atom.Selection(hier,
+                                    molecule=row['p1'],
+                                    residue_index=int(row['r1'])).get_selected_particles()
+            s2 = IMP.atom.Selection(hier,
+                                    molecule=row['p2'],
+                                    residue_index=int(row['r2'])).get_selected_particles()
+
+            if len(s1) > 0 and len(s2) > 0:
+                m = row['MIC']
+                if m <= 0.6:
+                    d_mic = (math.log(0.6)-n)/k
+                else:
+                    d_mic = (math.log(m)-n)/k
+                dists_MIC.append(d_mic)
+            
+        return dists_MIC
+        
+    
+    def get_pEMAP_satisfaction_full(self, MIC_file):
+        self.nproc =10
+        sPEMAP_all = pd.DataFrame(columns = ['cluster','pEMAP_satisfaction'])
+        
+        # Read MIC file
+        self.MIC = pd.read_csv(MIC_file, sep=' ', names=['p1','p2','r1','r2','MIC','d'])
+        print(self.MIC.head())
+        
+        # For each cluster read all rmfs and accumulated distances
+        RC = tools.ReadClustering(self.clustering_dir)
+        n_clusters = RC.get_number_of_clusters()
+        
+        for cl in range(n_clusters):
+            self.dists_pEMAP = self.manager.dict()
+            rmfs_cluster = RC.get_rmfs_cluster(cl)
+            
+            # Divide rmfs into groups
+            ND = int(np.ceil(len(rmfs_cluster)/float(self.nproc)))
+            rmfs_dict = {}
+            for k in range(self.nproc-1):
+                rmfs_dict[k] = rmfs_cluster[(k*ND):(k*ND+ND)]
+            rmfs_dict[self.nproc-1] = rmfs_cluster[((self.nproc-1)*ND):(len(rmfs_cluster))]
+
+            # Define an output queue
+            output = mp.Queue()
+                
+            # Setup a list of processes that we want to run
+            processes = [mp.Process(target=self.distances_pEMAP,
+                                    args=(rmfs_dict[x], 0)) for x in range(self.nproc)]
+
+            # Run processes
+            for p in processes:
+                p.start()
+
+            # Exit the completed processes
+            for p in processes:
+                p.join()
+        
+            # Save validation report
+            dist_mic = self.distance_implied_by_MIC(MIC_file, rmfs_cluster[0])
+            AA = [v for  k, v in self.dists_pEMAP.items()]
+            AA = np.array(AA)
+            dist_min = np.apply_along_axis(np.min, axis=0, arr=AA)
+            satif = [1 for i, j in zip(dist_min, dist_mic) if i >= j]
+            percent_satif = float(len(satif))/len(dist_mic)
+            sPEMAP_all =sPEMAP_all.append({'cluster': cl, 'pEMAP_satisfaction': percent_satif},
+                                          ignore_index = True)
+
+
+        print(n_clusters, sPEMAP_all)
+        sPEMAP_all.to_csv(os.path.join(
+            self.clustering_dir,'pEMAP_all_validation_summary.csv'), index=False)
+            
+
+    def distances_pEMAP(self, rmfs, t):
+        
+        for k, rmf in enumerate(rmfs):
+            model = IMP.Model()
+            hier = IMP.pmi.analysis.get_hiers_from_rmf(model,0,rmf)[0]
+            dists = self.get_all_distances_pEMAP(hier)
+            self.dists_pEMAP[rmf] = dists
+            del model, hier
+        
+    def get_distance_pair(self, s1, s2):
+        dd  = []
+        for ss1, ss2 in itertools.product(s1, s2):
+            c1 = IMP.core.XYZ(ss1)
+            c2 = IMP.core.XYZ(ss2)
+            dist = IMP.core.get_distance(c1,c2)
+            dd.append(dist)
+        return np.min(dd)
+
+    def get_all_distances_pEMAP(self, hier):
+        dist = []
+        for i, row in self.MIC.iterrows():
+            s1 = IMP.atom.Selection(hier,
+                                    molecule=row['p1'],
+                                    residue_index=int(row['r1'])).get_selected_particles()
+            s2 = IMP.atom.Selection(hier,
+                                    molecule=row['p2'],
+                                    residue_index=int(row['r2'])).get_selected_particles()
+
+            if len(s1) > 0 and len(s2) > 0:
+                d = self.get_distance_pair(s1, s2)
+                dist.append(d)
+            
+        return dist
+        
 
     def EM3D_satisfaction(self):
 

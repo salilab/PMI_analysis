@@ -958,11 +958,13 @@ class AnalysisTrajectories(object):
             fr = int(row.MC_frame)
             fr_rmf = int(row.rmf_frame_index)
             file = row.rmf3_file
-            os.system('rmf_slice '+ id+'/'+file + ' '+gsms_dir+'/'+filename+'_'+str(id)+'_'+str(fr)+'.rmf3 --frame '+str(fr_rmf) )
+            traj_in = os.path.join(id, file)
+            file_out = os.path.join(gsms_dir,filename+'_'+str(id)+'_'+str(fr)+'.rmf3')
+            
+            os.system('rmf_slice '+traj_in+ ' '+file_out+' --frame '+str(fr_rmf) )
             
             # Collect scores
             self.scores.append(row.Total_Score)
-            #self.scores.append(row.Total_score)            
 
     def create_gsms_dir(self, dir):
         '''
@@ -1269,7 +1271,7 @@ class AnalysisTrajectories(object):
         for k,v in self.Sampling.items():
             DS[k] = [v]
             
-        DS.to_csv(os.path.join(self.analysis_dir,'/summary_sampling_information.csv'), index=False)
+        DS.to_csv(os.path.join(self.analysis_dir,'summary_sampling_information.csv'), index=False)
 
     def summarize_fit_to_information(self):
 

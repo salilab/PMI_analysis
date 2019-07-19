@@ -9,6 +9,7 @@ import random
 import numpy as np
 import pandas as pd
 import sys
+import os
 import multiprocessing as mp
 
 import matplotlib as mpl
@@ -47,7 +48,7 @@ class AccuracyModels(object):
         self.read_scores_files()
 
         # Read cluster files
-        clusters = glob.glob(self.clustering_dir+'/cluster.*.all.txt')
+        clusters = glob.glob(os.path.join(self.clustering_dir,'cluster.*.all.txt'))
         n_clusters = len(clusters)
         print(clusters, self.clustering_dir)
 
@@ -113,8 +114,8 @@ class AccuracyModels(object):
         
         # Read identities of models, and put into dictionary
         ids_B = {}
-        ids_file_A = open(self.clustering_dir+'/Identities_A.txt','r')
-        ids_file_B = open(self.clustering_dir+'/Identities_B.txt','r')
+        ids_file_A = open(os.path.join(self.clustering_dir,'Identities_A.txt'),'r')
+        ids_file_B = open(os.path.join(self.clustering_dir,'Identities_B.txt'),'r')
     
         for line in ids_file_A:
             vals = line.split()
@@ -125,10 +126,15 @@ class AccuracyModels(object):
 
     def write_accuracy_values(self):
         self.score_accu = {}
-        out_summary = open(self.clustering_dir+'/accuracy_'+self.out_header+'_clusters.dat','w')
+        out_summary = open(os.path.join(
+            self.clustering_dir,'accuracy_'+self.out_header+'_clusters.dat'),'w')
+        
         out_summary.write('cluster mean min max N \n')
-        for k, v in self.all_accu.iteritems():
-            out = open(self.clustering_dir+'/accuracy_'+self.out_header+'_cl'+str(k)+'.dat','w')
+        print(self.all_accu)
+        for k, v in self.all_accu.items():
+            out = open(os.path.join(
+                self.clustering_dir,'accuracy_'+self.out_header+'_cl'+str(k)+'.dat'),'w')
+            
             if len(np.array(v))> 0:
                 vv = np.array(v)[:,1].astype(float)
                 out_summary.write(str(k)+'\t'+str(np.mean(vv))+'\t'+str(np.min(vv))+'\t'+str(np.max(vv))+'\t'+str(len(vv))+'\n')
@@ -177,7 +183,8 @@ class AccuracyModels(object):
         ax.set_ylabel('Number of models',fontsize=12)
 
         pl.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
-        fig.savefig(self.clustering_dir+'/plot_accuracy_'+self.out_header+'_clusters.pdf')
+        fig.savefig(os.path.join(
+            self.clustering_dir,'plot_accuracy_'+self.out_header+'_clusters.pdf'))
         
         
     def plot_score_versus_accuracy(self):
@@ -189,4 +196,5 @@ class AccuracyModels(object):
         ax.set_ylabel('Accuracy (A)',fontsize=12)
         
         pl.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
-        fig.savefig(self.clustering_dir+'/plot_score_vs_accuracy_'+self.out_header+'.pdf')
+        fig.savefig(os.path.join(
+            self.clustering_dir,'plot_score_vs_accuracy_'+self.out_header+'.pdf'))

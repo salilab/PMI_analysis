@@ -18,6 +18,7 @@ import itertools
 import numpy as np
 import scipy.spatial.distance
 import os
+import glob
 import math
 import random
 
@@ -81,7 +82,8 @@ class CMTable(object):
                 # Get rmf3 files
                 self.RC = tools.ReadClustering(self.clustering_dir)
                 rmfs_cluster = self.RC.get_rmfs_cluster(self.cluster)
-                rmfs_cluster = random.sample(rmfs_cluster, self.number_of_models)
+                if len(rmfs_cluster) > self.number_of_models:
+                        rmfs_cluster = random.sample(rmfs_cluster, self.number_of_models)
                 
                 self.rmf = rmfs_cluster[0]
                 self.number_rmfs = len(rmfs_cluster)
@@ -206,7 +208,8 @@ class CMTable(object):
             '''
 
             for key in self.cm_all.keys():
-                np.savetxt(self.out_dir+'/ContMap_%s.dat'%(key),np.array(self.cm_all[key]),fmt='%s')
+                np.savetxt(os.path.join(
+                        self.out_dir,'ContMap_%s.dat'%(key)),np.array(self.cm_all[key]),fmt='%s')
     
 
 	def _get_resi_dict(self):
@@ -230,7 +233,7 @@ class CMTable(object):
 
 			self.resi_dict[prot] = resi
 
-	def get_close_contacts(self, threshold = 0.0):
+	def get_close_contacts(self, threshold = 0.2):
 		self._get_resi_dict()
 
 		cont_dict = {}
@@ -254,12 +257,13 @@ class CMTable(object):
 				
 				k = 0
 				for i in np.transpose(loc):
-					contacts.append(self.resi_dict[p1][i[1]]+self.resi_dict[p2][i[0]]+[int(frq[k])])
+					contacts.append(self.resi_dict[p1][i[1]]+self.resi_dict[p2][i[0]]+[frq[k]])
 					k += 1
 				# Sort array
 				contacts = np.array(contacts)
-				sort_contacts = contacts[contacts[:,4].astype(int).argsort()]
-				np.savetxt(self.out_dir+'/contacts_%s_%s.dat'%(p1,p2),sort_contacts[::-1],fmt='%s')
+				sort_contacts = contacts[contacts[:,4].astype(float).argsort()]
+				np.savetxt(os.path.join(
+                                        self.out_dir,'contacts_%s_%s.dat'%(p1,p2)),sort_contacts[::-1],fmt='%s')
 				cont_dict[p1+'-'+p2] = contacts
 		
 	def plot_contact_maps(self,
@@ -359,7 +363,7 @@ class CMTable(object):
 			                         fontsize=8)
 			k += 1
 		fig.tight_layout()
-		fig.savefig(self.out_dir+'/'+filename) 
+		fig.savefig(os.path.join(self.out_dir,filename)) 
 
 
         def add_XLs(self, data_file):
