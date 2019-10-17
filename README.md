@@ -6,6 +6,7 @@ These scripts are used to analyze a series of trajectories, look at their scores
 * numpy
 * pandas
 * matplotlib
+* pyrmsd
 
 ## Analysis steps:
 
