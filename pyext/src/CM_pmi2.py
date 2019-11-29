@@ -15,52 +15,38 @@ import RMF
 import IMP.pmi.analysis
 from operator import itemgetter
 from copy import deepcopy
-from math import log,sqr
+from math import log,sqrt
 import itertools
 import numpy as np
 import scipy.spatial.distance
 import os
 
+n_resi = {'Vif':175,
+          'CBFB':182,
+          'EloB':161,
+          'EloC':112,
+          'CUL5':780,
+          'Rbx2':113,
+          'A3G':384}
 
 class CMTable(object):
-	""" Compute contacts maps for all models in ensemble """
+	""" Visualization of Occam spring """
 	def __init__(self,
                     cutoff = 20.0,
                     out_dir ='./'):
 
+	        self.XLs = []
 		self.contactmap = None
 		self.cutoff = cutoff
                 self.out_dir = out_dir
                 self.Table = {}
-                self.XL_dict = {}               
- 
+                
                 if os.path.exists(self.out_dir):
                     print('Overwriting '+ self.out_dir)
                 else:
                     os.makedirs(self.out_dir)
     
-        def get_all_indexes(self, p1):
-            '''
-            Get all residue indexes in bead
-            '''    
 
-            bd = IMP.atom.Fragment(p1).get_residue_indexes()
-            # Check if not a fragment
-            if len(bd) == 0: bd = [IMP.atom.Residue(p1).get_index()]
-            return bd
-
-        def get_number_of_residues(self, model, rmf):
-            '''
-            Get number of residues in each chain
-            '''
-            self.n_residues = {}
-            h = IMP.pmi.analysis.get_hiers_from_rmf(model,0,rmf)[0]
-            prots = get_particles_at_resolution_one(h)
-            for p, components in prots.iteritems():
-                ri = self.get_all_indexes(components[0])[0]
-                rf = self.get_all_indexes(components[-1])[-1]
-                self.n_residues[p] = rf - ri + 1
-        
 	def _get_coords_array(self, particles_list):
 		coords = []
 		radii = []
@@ -81,9 +67,9 @@ class CMTable(object):
 		return np.array(coords), np.array(radii)
 
 	def _get_contactmap_pair(self, name1,name2):
-		'''
+		""" 
 		Given two proteins, computes the contact map 
-		'''
+		"""
 		
 		particles_1 = self.prot_dictionary[name1]
 		particles_2 = self.prot_dictionary[name2]
@@ -98,10 +84,10 @@ class CMTable(object):
 	def contact_map_prob_protein_pair(self, model, rmfs, save_matrices = True):
 		self.cm_all = {}
 		k = 0
-		for k, rmf in enumerate(rmfs):
+		for rmf in rmfs:
 			prots = IMP.pmi.analysis.get_hiers_from_rmf(model,0,rmf)[0]
 			self.prot_dictionary = get_particles_at_resolution_one(prots)
-	
+			
 			for name1, name2 in itertools.combinations_with_replacement(self.prot_dictionary.keys(),2):
 				if name1 == name2:
 					cm = self._get_contactmap_pair(name1,name2)
@@ -116,14 +102,13 @@ class CMTable(object):
 					else:
 						self.cm_all[name1+'-'+name2] = self.cm_all[name1+'-'+name2] + cm
                         # Get XLs distances
-                        if len(self.XL_dict)> 0:
-			    self.get_dists(prots)
+			self.get_dists(prots)
+			k += 1
                 
 		# Write all contact maps to files
 		if save_matrices == True:
 			for key in self.cm_all.keys():
-				np.savetxt(os.path.join(
-                                        self.out_dir,'ContMap_%s.dat'%(key)),np.array(self.cm_all[key])/float(k),fmt='%s')
+				np.savetxt(self.out_dir+'/ContMap_%s.dat'%(key),np.array(self.cm_all[key])/float(k),fmt='%s')
 
 	def _get_resi_dict(self):
 		self.resi_dict = {}
@@ -142,38 +127,26 @@ class CMTable(object):
 
 			self.resi_dict[prot] = resi
 
-	def get_close_contacts(self, threshold = 0.5):
+	def get_close_contacts(self):
 		self._get_resi_dict()
 
 		cont_dict = {}
-		for name1, name2 in itertools.combinations_with_replacement(self.resi_dict,2):
+		for name1, name2 in itertools.combinations(self.resi_dict,2):
 			contacts = []
 			# Check if proteins have any contact
-                        if name1+'-'+name2 in self.cm_all.keys():
-                            p1 = name1
-                            p2 = name2
-                            mat = self.cm_all[name1+'-'+name2]  
-                        elif name2+'-'+name1 in self.cm_all.keys():
-                            p1 = name2
-                            p2 = name1
-                            mat = self.cm_all[name2+'-'+name1]
-                        else:
-                            raise TypeError("No contact matrix for "+ name1, name2)
- 
-			if np.sum(mat) > 0:
-				loc = np.where(mat> threshold)
-				frq = mat[loc]
+			if np.sum(self.cm_all[name1+'-'+name2]) > 0:
+				loc = np.where(self.cm_all[name1+'-'+name2]>0)
+				frq = self.cm_all[name1+'-'+name2][loc]
 				#print('Number of contacts between:', name1, name2, 'is', int(np.sum(self.cm_all[name1+'-'+name2])))
 				k = 0
 				for i in np.transpose(loc):
-					contacts.append(self.resi_dict[p1][i[1]]+self.resi_dict[p2][i[0]]+[int(frq[k])])
+					contacts.append(self.resi_dict[name1][i[1]]+self.resi_dict[name2][i[0]]+[int(frq[k])])
 					k += 1
 				# Sort array
 				contacts = np.array(contacts)
 				sort_contacts = contacts[contacts[:,4].astype(int).argsort()]
-				np.savetxt(os.path.join(
-                                        self.out_dir,'contacts_%s_%s.dat'%(p1,p2)),sort_contacts[::-1],fmt='%s')
-				cont_dict[p1+'-'+p2] = contacts
+				np.savetxt(self.out_dir+'/contacts_%s_%s.dat'%(name1,name2),sort_contacts[::-1],fmt='%s')
+				cont_dict[name1+'-'+name2] = contacts
 		
 	def plot_contact_maps(self,
 	                      filename = 'contact_map.pdf'):
@@ -185,9 +158,10 @@ class CMTable(object):
 		# Determine the number of residues per protein
 		tot = 0
 		nres = {}
-		for p, residues in self.n_residues.iteritems():
-			nres[p] = residues
-			tot = tot + residues
+		for p in self.prot_dictionary.keys():
+			n = np.shape(self.prot_dictionary[p])[0]
+			nres[p] = n
+			tot = tot + n
 
 		# Determine the proportions
 		for p in nres.keys():
@@ -202,55 +176,49 @@ class CMTable(object):
 				       height_ratios = nres.values())
 
 		i=0
-                leng = 0
 		for p1 in nres.keys():
 			for p2 in nres.keys():
 				# Get CM matrix
 				if p1+'-'+p2 in self.cm_all.keys():
-                                        if np.shape(self.cm_all[p1+'-'+p2])[0] == self.n_residues[p1]:
+                                        if np.shape(self.cm_all[p1+'-'+p2])[0] == n_resi[p1]:
 					        M = np.transpose(self.cm_all[p1+'-'+p2])
 	                                else:
                                                 M = np.transpose(self.cm_all[p1+'-'+p2]) 
 				else:
-                                        if np.shape(self.cm_all[p2+'-'+p1])[0] == self.n_residues[p2]:
+                                        if np.shape(self.cm_all[p2+'-'+p1])[0] == n_resi[p2]:
 					        M = self.cm_all[p2+'-'+p1]
                                         else:
                                                 M = self.cm_all[p2+'-'+p1]
                                 print(p1, p2, np.shape(M))
 				ax = pl.subplot(gs[i])
-                                #ax.set_aspect('equal')
 				ax.matshow(M,cmap=pl.get_cmap('Blues'))
-                                ax.set_xlim([1,np.shape(M)[1]])
-                                ax.set_ylim([1,np.shape(M)[0]])
 				# Plot cross-links by looping over the XL table
-				sXLs = { key:value for key, value in self.Table.items() if 
-                                        (((p1==key[0]) and (p2==key[2])) or ((p2==key[0]) and (p1==key[2]))) }
-                                leng += len(sXLs)
-                                print('leng', len(sXLs), len(self.Table))
+				sXLs = { key:value for key, value in self.Table.items() if ((p1 in key) and (p2 in key)) }
 				for xl in sXLs.keys():
-					pp1 = xl[0]
-					pp2 = xl[2]
-					r1 = int(xl[1])
-					r2 = int(xl[3])
+					pp1 = xl.split('-')[0]
+					pp2 = xl.split('-')[2]
+					r1 = int(xl.split('-')[1])
+					r2 = int(xl.split('-')[3])
 					if p1 == p2:
 						if np.min(sXLs[xl]) < 35.0:
-							ax.scatter(r1,r2, color='greenyellow',alpha=0.7)
-							ax.scatter(r2,r1, color='greenyellow',alpha=0.7)
+							ig = 0
+							ax.scatter(r1,r2, color='gold',alpha=0.7)
+							ax.scatter(r2,r1, color='gold',alpha=0.7)
 						else:
+							igg = 0
 							ax.scatter(r1,r2, color='orangered',alpha=0.7)
 							ax.scatter(r2,r1, color='orangered',alpha=0.7)
 					else:
-						if p1 == pp1 and p2 == pp2:
+						if p1 == pp1:
 							if np.min(sXLs[xl]) < 35.0:
-								ax.scatter(r2,r1, color='greenyellow',alpha=0.7)
+								ax.scatter(r2,r1, color='gold',alpha=0.7)
 							else:
 								ax.scatter(r2,r1, color='orangered',alpha=0.7)
-						elif p2 == pp1 and p1 == pp2:
+						else:
 							if np.min(sXLs[xl]) < 35.0:
-								ax.scatter(r1,r2, color='greenyellow',alpha=0.7)
+								ax.scatter(r1,r2, color='gold',alpha=0.7)
 							else:
 								ax.scatter(r1,r2, color='orangered',alpha=0.7)
-
 				
   				i += 1
 
@@ -258,19 +226,18 @@ class CMTable(object):
 		# Add horizontal labels (top plots)
 		for i in range(nprot):
 			fig.get_axes()[i].set_title('%s'%(nres.keys()[i]),
-									   fontsize=8)
+									   fontsize=12)
 		# Add vertical labels
 		fig.get_axes()[0].set_ylabel('%s'%(nres.keys()[0]),
-			                         fontsize=8)
+			                         fontsize=12)
 		k = 1 
 		for i in range(nprot,nprot*nprot,nprot):
 			fig.get_axes()[i].set_ylabel('%s'%(nres.keys()[k]),
-			                         fontsize=8)
+			                         fontsize=12)
 			k += 1
 		fig.tight_layout()
-		fig.savefig(os.path.join(self.out_dir,filename)) 
-
-
+		fig.savefig(self.out_dir+'/'+filename) 
+	
 	def coordinates_to_map(self,prots):
 		coords = []
 		radii = []
@@ -315,14 +282,13 @@ class CMTable(object):
 		return np.array(self.contactmap)
 
         def get_XLdict(self,data_file):
-            '''
-            Read XLs from csv used for modeling
-            '''
-	    for i, line in enumerate(open(data_file)):
-	        vals = line.split(',')
-		if i > 0:
-		    self.XL_dict[i] = [vals[0],vals[2],vals[1],vals[3]]
-
+		self.XL_dict = {}
+		i = 0
+		for line in open(data_file):
+			vals = line.split(',')
+			if i > 0:
+				self.XL_dict[vals[5]] = [vals[0],vals[2],vals[1],vals[3]]
+			i += 1
 
         def get_dists(self, prot):
 		
@@ -363,9 +329,9 @@ class CMTable(object):
                         #print(keys, min(all_dist))
 			if len(all_dist)> 0:
 				if self.XL_dict[keys][0]+'-'+self.XL_dict[keys][1]+'-'+self.XL_dict[keys][2]+'-'+self.XL_dict[keys][3] in self.Table.keys():
-					self.Table[(self.XL_dict[keys][0],+self.XL_dict[keys][1],self.XL_dict[keys][2],self.XL_dict[keys][3])].append(min(all_dist))
+					self.Table[self.XL_dict[keys][0]+'-'+self.XL_dict[keys][1]+'-'+self.XL_dict[keys][2]+'-'+self.XL_dict[keys][3]].append(min(all_dist))
 				else:
-					self.Table[(self.XL_dict[keys][0],self.XL_dict[keys][1],self.XL_dict[keys][2],self.XL_dict[keys][3])] = [min(all_dist)]									
+					self.Table[self.XL_dict[keys][0]+'-'+self.XL_dict[keys][1]+'-'+self.XL_dict[keys][2]+'-'+self.XL_dict[keys][3]] = [min(all_dist)]									
         
         def read_contact_maps(files):
                 self.cm_all = {}
@@ -380,8 +346,7 @@ class CMTable(object):
 			xl_min[i] = np.min(self.Table[i])
 
 def get_particles_at_resolution_one(prot):
-    """
-    Get particles at res 1, or any beads, based on the name.
+    """Get particles at res 1, or any beads, based on the name.
     No Representation is needed. This is mainly used when the hierarchy
     is read from an RMF file.
     @return a dictionary of component names and their particles
