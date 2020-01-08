@@ -365,6 +365,70 @@ class CMTable(object):
 		fig.tight_layout()
 		fig.savefig(os.path.join(self.out_dir,filename)) 
 
+        def plot_contact_maps_subunits(self):
+                '''
+                Function to plot distances between beads
+                /residues between all combinations of
+                subunits
+                '''
+                import matplotlib as mpl
+                mpl.use('Agg')
+                import matplotlib.pylab as pl
+                import matplotlib.pyplot as plt
+                import matplotlib.gridspec as gridspec
+                plt.rcParams['xtick.bottom'] = plt.rcParams['xtick.labelbottom'] = True
+                plt.rcParams['xtick.top'] = plt.rcParams['xtick.labeltop'] = True
+                # Determine the number of residues per protein
+                tot = 0
+                nres = {}
+                for p, residues in self.n_residues.items():
+                        nres[p] = residues
+                        tot = tot + residues
+
+                # Determine the proportions
+                for p in nres.keys():
+                        nres[p] = 10*nres[p]/float(tot)
+
+                # Create the grid
+                fig = pl.figure(figsize=(8,8))
+                print (nres)
+                nprot = len(nres.keys())
+                gs = gridspec.GridSpec(nprot, nprot,
+                                       width_ratios = nres.values(),
+                                       height_ratios = nres.values())
+                leng = 0
+                combinations=list(itertools.combinations(nres.keys(),2))
+                for i, p in enumerate(combinations):
+                    p1=p[0];p2=p[1]
+                    fig = pl.figure(figsize=(8,8))
+                    print(p1, p2, nres[p1], nres[p2])
+                    filename='Contact_map_'+p1+'-'+p2+'.pdf'
+                    if p1+'-'+p2 in self.cm_all.keys():
+                            if np.shape(self.cm_all[p1+'-'+p2])[0] == self.n_residues[p1]:
+                                    M = np.transpose(self.cm_all[p1+'-'+p2])
+                            else:
+                                    M = np.transpose(self.cm_all[p1+'-'+p2])
+                    else:
+                            if np.shape(self.cm_all[p2+'-'+p1])[0] == self.n_residues[p2]:
+                                    M = self.cm_all[p2+'-'+p1]
+                            else:
+                                    M = self.cm_all[p2+'-'+p1]
+                    ax = fig.add_subplot(111)
+                    cax=ax.matshow(M,cmap=pl.get_cmap('RdYlBu'),vmin=0,vmax=100)
+                    ax.set_xlim([1,np.shape(M)[1]])
+                    ax.set_ylim([1,np.shape(M)[0]])
+                    ax.tick_params(axis='x', bottom=True, top=False,labelbottom=True, labeltop=False,labelsize=20)
+                    ax.tick_params(axis='y', labelsize=20)
+                    ax.set_xlabel(p2, fontsize=20)
+                    ax.set_ylabel(p1, fontsize=20)
+                    fig.colorbar(cax,ax=ax,ticks=[0,20,40,60,80,100])
+                    #cmap.ax.tick_params(labelsize=14)
+                    fig.tight_layout()
+                    fig.savefig(os.path.join(self.out_dir,filename),bbox_inches="tight")
+                    plt.close("all")
+                    plt.close(fig)
+                    plt.clf()
+
 
         def add_XLs(self, data_file):
             '''
