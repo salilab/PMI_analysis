@@ -30,6 +30,10 @@ mpl.rcParams.update({'font.size': 10})
 import seaborn as sns
 import hdbscan
 
+import IMP
+import IMP.rmf
+import RMF
+
 class AnalysisTrajectories(object):
     def __init__(self,
                  out_dirs,
@@ -961,10 +965,133 @@ class AnalysisTrajectories(object):
             traj_in = os.path.join(id, file)
             file_out = os.path.join(gsms_dir,filename+'_'+str(id)+'_'+str(fr)+'.rmf3')
             
-            os.system('rmf_slice '+traj_in+ ' '+file_out+' --frame '+str(fr_rmf) )
+            os.system('rmf_slice -q'+traj_in+ ' '+file_out+' --frame '+str(fr_rmf) )
             
             # Collect scores
             self.scores.append(row.Total_Score)
+
+    def do_extract_models_single_rmf(self, gsms_info, out_rmf_name, traj_dir, analysis_dir, scores_prefix="scores", clean_rmfs=True):
+        '''
+        Extract all models to a single RMF file
+
+        First, extract models from each independent run into an RMF file in that run directory (multithreaded)
+
+        Then, concatenate these RMFs into one RMF in the analysis_dir along with the extracted scores from each file 
+
+        @param gsms_info : pandas dataframe with good scoring model information
+        @param out_rmf_name : the filename for the output RMF (and "temporary" rmfs created in each trajectory directory)
+        @param traj_dir : the folder containing all trajectory folders
+        @param analysis_dir : the analysis folder for the output files
+        @param scores_prefix : Prefix for the output scores file
+        @param clean_rmfs : if True, delete the RMF files created in each trajectory directory
+        '''
+
+        self.scores = self.manager.list()
+
+        # Split the DF into pieces based on trajectory
+
+        # Find the number of trajectories
+        traj_dirs = gsms_info['traj'].unique()
+        split_dfs = []  # Dataframe split into pieces
+        filenames = []  # RMF file names
+        scorefiles = []
+
+        for td in traj_dirs:
+            split_dfs.append(gsms_info[gsms_info['traj']==td])
+            filenames.append(traj_dir+"/"+td+"/"+out_rmf_name)
+            scorefiles.append(traj_dir+"/"+td+"/"+scores_prefix+".txt")
+
+        # Define an output queue
+        output = mp.Queue()
+        if len(filenames) < self.nproc:
+            n_proc = len(filenames)
+        else:
+            n_proc = self.nproc
+        # Setup a list of processes that we want to run
+        processes = [mp.Process(target=self.extract_models_to_single_rmf, args=(split_dfs[x], filenames[x], traj_dir, scorefiles[x])) for x in range(n_proc)]
+
+        # Run processes
+        for p in processes:
+            p.start()
+
+        # Exit the completed processes
+        for p in processes:
+            p.join()
+
+        rmfcat_string = "rmf_cat "
+        scorescat_string = "cat "
+        # Concatenate the RMF and scorefiles
+        for n in range(len(filenames)):
+            rmfcat_string += filenames[n] +" "
+            scorescat_string += scorefiles[n] +" "
+
+        # output all rmfs to the filename
+        rmfcat_string += analysis_dir + "/" + out_rmf_name
+        print("Concatenating",len(filenames)," RMF files to", analysis_dir + "/" + out_rmf_name)
+        os.system(rmfcat_string)
+
+        # Concatenate all score files to the same file
+        scorescat_string += "> "+ analysis_dir + "/" + scores_prefix +".txt"
+        os.system(scorescat_string)
+
+        # Clean up our temporary files
+        if clean_rmfs:
+            for fn in filenames:
+                print(fn)
+                os.remove(fn)
+            for sf in scorefiles:
+                os.remove(sf)
+
+    def extract_models_to_single_rmf(self, inf, output_rmf, top_dir, scores_file): 
+        # Given a dataframe from get_models_to_extract(), extract these models and
+        # place into a single RMF file: output_rmf
+
+        scores = []
+        i = 0
+
+        # Initialize output RMF file
+        row1 = inf.iloc[0]
+        rmf_file = top_dir+row1.traj+row1.rmf3_file[1:]
+        # Create model and import hierarchies from one of the RMF files
+        m = IMP.Model()
+        f = RMF.open_rmf_file_read_only(rmf_file)
+        h0 = IMP.rmf.create_hierarchies(f, m)[0]
+        fh_out = RMF.create_rmf_file(output_rmf)
+        IMP.rmf.add_hierarchy(fh_out, h0)
+        del f
+
+        # Get a list of all the replica rmf3 files
+        replicas = inf['rmf3_file'].unique()
+
+        # Cycle through models by individual replica so we only open one RMF at a time
+        for rep in replicas:
+            rep_inf = inf[inf['rmf3_file']==rep]
+            rmf_file = top_dir+row1.traj+rep[1:]
+            f = RMF.open_rmf_file_read_only(rmf_file)
+            IMP.rmf.link_hierarchies(f, [h0])
+            for (row_id, row) in rep_inf.iterrows():
+                t = row.traj
+                fr = int(row.MC_frame)
+                fr_rmf = int(row.rmf_frame_index)
+                # Sometimes individual frames don't print out for a number of reasons
+                # Just skip over these
+                try:
+                    IMP.rmf.load_frame(f, RMF.FrameID(fr_rmf))
+                except:
+                    continue
+                IMP.rmf.save_frame(fh_out, str(i))
+
+                if i%1000 == 0:
+                    print("Writing frame:", i, "of", len(inf.index), "for", output_rmf)
+
+                # Collect scores
+                scores.append(row.Total_Score)
+                i+=1
+            del f
+
+        # Write scores to file
+        del fh_out
+        np.savetxt(scores_file, np.array(scores))
 
     def create_gsms_dir(self, dir):
         '''
