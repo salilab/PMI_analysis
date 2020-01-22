@@ -1037,7 +1037,6 @@ class AnalysisTrajectories(object):
         # Clean up our temporary files
         if clean_rmfs:
             for fn in filenames:
-                print(fn)
                 os.remove(fn)
             for sf in scorefiles:
                 os.remove(sf)
