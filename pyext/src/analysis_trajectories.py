@@ -965,7 +965,7 @@ class AnalysisTrajectories(object):
             traj_in = os.path.join(id, file)
             file_out = os.path.join(gsms_dir,filename+'_'+str(id)+'_'+str(fr)+'.rmf3')
             
-            os.system('rmf_slice -q'+traj_in+ ' '+file_out+' --frame '+str(fr_rmf) )
+            os.system('rmf_slice -q '+traj_in+ ' '+file_out+' --frame '+str(fr_rmf) )
             
             # Collect scores
             self.scores.append(row.Total_Score)
