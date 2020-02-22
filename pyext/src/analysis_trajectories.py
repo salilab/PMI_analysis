@@ -1008,7 +1008,7 @@ class AnalysisTrajectories(object):
         else:
             n_proc = self.nproc
         # Setup a list of processes that we want to run
-        processes = [mp.Process(target=self.extract_models_to_single_rmf, args=(split_dfs[x], filenames[x], traj_dir, scorefiles[x])) for x in range(n_proc)]
+        processes = [mp.Process(target=self.extract_models_to_single_rmf, args=(split_dfs[x], filenames[x], traj_dir, scorefiles[x])) for x in range(len(filenames))]
 
         # Run processes
         for p in processes:
@@ -1050,7 +1050,7 @@ class AnalysisTrajectories(object):
 
         # Initialize output RMF file
         row1 = inf.iloc[0]
-        rmf_file = top_dir+row1.traj+row1.rmf3_file[1:]
+        rmf_file = top_dir+row1.traj+"/"+row1.rmf3_file
         # Create model and import hierarchies from one of the RMF files
         m = IMP.Model()
         f = RMF.open_rmf_file_read_only(rmf_file)
@@ -1065,13 +1065,14 @@ class AnalysisTrajectories(object):
         # Cycle through models by individual replica so we only open one RMF at a time
         for rep in replicas:
             rep_inf = inf[inf['rmf3_file']==rep]
-            rmf_file = top_dir+row1.traj+rep[1:]
+            rmf_file = top_dir+row1.traj+"/"+rep
             f = RMF.open_rmf_file_read_only(rmf_file)
             IMP.rmf.link_hierarchies(f, [h0])
             for (row_id, row) in rep_inf.iterrows():
                 t = row.traj
                 fr = int(row.MC_frame)
                 fr_rmf = int(row.rmf_frame_index)
+
                 # Sometimes individual frames don't print out for a number of reasons
                 # Just skip over these
                 try:
