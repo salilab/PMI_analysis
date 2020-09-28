@@ -27,12 +27,15 @@ import matplotlib.cm as cmx
 import matplotlib.colors as colors
 mpl.rcParams.update({'font.size': 10})
 
-import seaborn as sns
 import hdbscan
 
 import IMP
 import IMP.rmf
 import RMF
+
+
+color_palette = [u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974', u'#64b5cd', u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974', u'#64b5cd', u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974', u'#64b5cd', u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974', u'#64b5cd', u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974', u'#64b5cd', u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974', u'#64b5cd', u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974', u'#64b5cd', u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974', u'#64b5cd', u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974', u'#64b5cd', u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974', u'#64b5cd', u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974', u'#64b5cd', u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974', u'#64b5cd', u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974', u'#64b5cd', u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974', u'#64b5cd', u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974', u'#64b5cd', u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974', u'#64b5cd', u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2']
+
 
 class AnalysisTrajectories(object):
     def __init__(self,
@@ -880,7 +883,7 @@ class AnalysisTrajectories(object):
         print('Generating HDBSCAN clustering plot ...')
         num_sel = len(S_comb_sel)-2
 
-        palette = sns.color_palette("deep", len(np.unique(S_comb_sel['cluster']))).as_hex()
+        palette = color_palette[:len(np.unique(S_comb_sel['cluster']))]
         cluster_colors = [palette[col] for col in S_comb_sel['cluster']]
 
         n_sel = len(selected_scores)
