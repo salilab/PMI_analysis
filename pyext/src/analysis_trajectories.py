@@ -13,6 +13,7 @@ import math
 import glob
 import random
 import itertools
+import subprocess
 import pandas as pd
 import numpy as np
 import multiprocessing as mp
@@ -1003,7 +1004,7 @@ class AnalysisTrajectories(object):
             split_dfs.append(gsms_info[gsms_info['traj']==td])
             filenames.append(traj_dir+"/"+td+"/"+out_rmf_name)
             scorefiles.append(traj_dir+"/"+td+"/"+scores_prefix+".txt")
-
+        
         # Define an output queue
         output = mp.Queue()
         if len(filenames) < self.nproc:
@@ -1020,18 +1021,40 @@ class AnalysisTrajectories(object):
         # Exit the completed processes
         for p in processes:
             p.join()
-
-        rmfcat_string = "rmf_cat "
+        
+        output_rmf = analysis_dir + "/" + out_rmf_name
         scorescat_string = "cat "
-        # Concatenate the RMF and scorefiles
-        for n in range(len(filenames)):
-            rmfcat_string += filenames[n] +" "
-            scorescat_string += scorefiles[n] +" "
+        
+        # Test to see if we have rmf_cat
+        try:
+            subprocess.run(["rmf_cat", "-h"], check=True)
+            rmfcat_string = "rmf_cat "
+            scorescat_string = "cat "
+            # Concatenate the RMF and scorefiles
+            for n in range(len(filenames)):
+                rmfcat_string += filenames[n] +" "
+                scorescat_string += scorefiles[n] +" "
 
-        # output all rmfs to the filename
-        rmfcat_string += analysis_dir + "/" + out_rmf_name
-        print("Concatenating",len(filenames)," RMF files to", analysis_dir + "/" + out_rmf_name)
-        os.system(rmfcat_string)
+            # output all rmfs to the filename
+            rmfcat_string += output_rmf
+            print("Concatenating",len(filenames)," RMF files to", output_rmf)
+            os.system(rmfcat_string)
+        except subprocess.CalledProcessError:
+            # Otherwise, we need to use RMF
+            orh = RMF.create_rmf_file(output_rmf)
+
+            for n in range(len(filenames)):
+                rh = RMF.open_rmf_file_read_only(filenames[n])
+                scorescat_string += scorefiles[n] +" "
+                if n==0:
+                    RMF.clone_file_info(rh, orh)
+                    RMF.clone_hierarchy(rh, orh)
+                    RMF.clone_static_frame(rh, orh)
+                orh.set_description(orh.get_description() +"\n" + rh.get_description())
+                for f in rh.get_frames():
+                    rh.set_current_frame(f)
+                    orh.add_frame(rh.get_name(f), rh.get_type(f))
+                    RMF.clone_loaded_frame(rh,orh)
 
         # Concatenate all score files to the same file
         scorescat_string += "> "+ analysis_dir + "/" + scores_prefix +".txt"
@@ -1053,7 +1076,7 @@ class AnalysisTrajectories(object):
 
         # Initialize output RMF file
         row1 = inf.iloc[0]
-        rmf_file = top_dir+row1.traj+"/"+row1.rmf3_file
+        rmf_file = top_dir+"/"+row1.rmf3_file
         # Create model and import hierarchies from one of the RMF files
         m = IMP.Model()
         f = RMF.open_rmf_file_read_only(rmf_file)
@@ -1068,7 +1091,8 @@ class AnalysisTrajectories(object):
         # Cycle through models by individual replica so we only open one RMF at a time
         for rep in replicas:
             rep_inf = inf[inf['rmf3_file']==rep]
-            rmf_file = top_dir+row1.traj+"/"+rep
+            rmf_file = top_dir+"/"+rep
+            print(top_dir, row1.traj, rep)
             f = RMF.open_rmf_file_read_only(rmf_file)
             IMP.rmf.link_hierarchies(f, [h0])
             for (row_id, row) in rep_inf.iterrows():
