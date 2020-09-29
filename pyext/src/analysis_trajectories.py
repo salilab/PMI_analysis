@@ -1027,7 +1027,7 @@ class AnalysisTrajectories(object):
         
         # Test to see if we have rmf_cat
         try:
-            subprocess.run(["rmf_cat", "-h"], check=True)
+            subprocess.check_call(["rmf_cat", "-h"], shell=True)
             rmfcat_string = "rmf_cat "
             scorescat_string = "cat "
             # Concatenate the RMF and scorefiles
