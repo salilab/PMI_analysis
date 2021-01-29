@@ -43,13 +43,13 @@ class AnalysisTrajectories(object):
                  out_dirs,
                  dir_name = 'run_',
                  out_name = 'output',
-                 analysis_dir = 'analysis/',
+                 analysis_dir = 'analysis',
                  nproc=6,
                  nskip=200):
 
-        self.out_dirs = out_dirs
+        self.out_dirs = [os.path.abspath(d) for d in out_dirs]
         self.dir_name = dir_name
-        self.analysis_dir = analysis_dir
+        self.analysis_dir = os.path.abspath(analysis_dir)
         self.nproc = nproc
         self.nskip = nskip
         self.restraint_names = {}
@@ -59,8 +59,7 @@ class AnalysisTrajectories(object):
         self.rerun = False
 
         # Create analysis dir if missing
-        if not os.path.exists(self.analysis_dir):
-            os.makedirs(self.analysis_dir)
+        os.makedirs(self.analysis_dir, exist_ok=True)
         
         # For multiprocessing
         self.manager = mp.Manager()
@@ -80,7 +79,8 @@ class AnalysisTrajectories(object):
         self.Validation = self.manager.dict()
 
         # Sample stat file
-        stat_files = np.sort(glob.glob(self.out_dirs[0]+'/stat.*.out'))
+        stat_files = glob.glob(os.path.join(self.out_dirs[0], 'stat.*.out'))
+        stat_files.sort()
 
         # Define with restraints to analyze
         self.Connectivity_restraint = False
@@ -383,9 +383,9 @@ class AnalysisTrajectories(object):
         S_dist = []
         P_info = []
         
-        for file in stat_files:
+        for sf in stat_files:
             # Read header
-            stat2_dict = self.get_keys(file)
+            stat2_dict = self.get_keys(sf)
             # Get fields to extract
             query_rmf_file = self.get_field_id(stat2_dict, 'rmf_file')
 
@@ -395,7 +395,7 @@ class AnalysisTrajectories(object):
             info_names, info_fields = self.get_info_fields(stat2_dict)
 
             line_number=0
-            for line in open(file).readlines():
+            for line in open(sf).readlines():
                 line_number += 1
                 try:
                     d = eval(line)
@@ -498,7 +498,8 @@ class AnalysisTrajectories(object):
             else:
                 traj = 0
                 traj_number = 0
-            stat_files = np.sort(glob.glob(out+'stat.*.out'))
+            stat_files = glob.glob(os.path.join(out, 'stat.*.out'))
+            stat_files.sort()
             self.Sampling['Number_of_replicas'] = self.Sampling['Number_of_replicas'] + [len(stat_files)]
         
             # Read all stat files of trajectory
@@ -940,15 +941,15 @@ class AnalysisTrajectories(object):
             p.join()
 
         # Write scores to file
-        np.savetxt(gsms_dir+'.txt', np.array(self.scores))
+        np.savetxt(os.path.join(gsms_dir, filename+'.txt'), np.array(self.scores))
     
     def write_GSMs_info(self, gsms_info, filename):
         restraint_cols = gsms_info.columns.values
         gsms_info.to_csv(os.path.join(self.analysis_dir,filename), index=False)
 
-    def get_models_to_extract(self, file):
+    def get_models_to_extract(self, f):
         # Get models to extract from file
-        DD  = pd.read_csv(file)
+        DD  = pd.read_csv(f)
         return DD
         
     def get_sample_of_models_to_extract(self, file_A, file_B):
@@ -962,12 +963,12 @@ class AnalysisTrajectories(object):
         Use rmf_slice to extract the GSMs
         '''
         for row in gsms_info.itertuples():
-            id = row.traj
+            ID = row.traj
             fr = int(row.MC_frame)
             fr_rmf = int(row.rmf_frame_index)
-            file = row.rmf3_file
-            traj_in = os.path.join(id, file)
-            file_out = os.path.join(gsms_dir,filename+'_'+str(id)+'_'+str(fr)+'.rmf3')
+            rmf_file = row.rmf3_file
+            traj_in = os.path.join(ID, rmf_file)
+            file_out = os.path.join(gsms_dir,filename+'_'+str(ID)+'_'+str(fr)+'.rmf3')
             
             os.system('rmf_slice -q '+traj_in+ ' '+file_out+' --frame '+str(fr_rmf) )
             
@@ -1002,8 +1003,8 @@ class AnalysisTrajectories(object):
 
         for td in traj_dirs:
             split_dfs.append(gsms_info[gsms_info['traj']==td])
-            filenames.append(traj_dir+"/"+td+"/"+out_rmf_name)
-            scorefiles.append(traj_dir+"/"+td+"/"+scores_prefix+".txt")
+            filenames.append(os.path.join(traj_dir, td, out_rmf_name))
+            scorefiles.append(os.path.join(traj_dir, td, scores_prefix+'.txt'))
         
         # Define an output queue
         output = mp.Queue()
@@ -1022,42 +1023,33 @@ class AnalysisTrajectories(object):
         for p in processes:
             p.join()
         
-        output_rmf = analysis_dir + "/" + out_rmf_name
-        scorescat_string = "cat "
+        output_rmf = os.path.join(analysis_dir, out_rmf_name)
+        output_score_file = os.path.join(analysis_dir, scores_prefix+'.txt')
         
-        # Test to see if we have rmf_cat
-        try:
-            subprocess.check_call(["rmf_cat", "-h"], shell=True)
-            rmfcat_string = "rmf_cat "
-            scorescat_string = "cat "
-            # Concatenate the RMF and scorefiles
-            for n in range(len(filenames)):
-                rmfcat_string += filenames[n] +" "
-                scorescat_string += scorefiles[n] +" "
-
-            # output all rmfs to the filename
-            rmfcat_string += output_rmf
-            print("Concatenating",len(filenames)," RMF files to", output_rmf)
+        # use rmf_cat if available
+        if shutil.which('rmf_cat'):
+            # concatenate RMF files
+            rmfcat_string = 'rmf_cat %s %s' % (' '.join(filenames), output_rmf)
+            print('Concatenating', len(filenames), 'RMF files to', output_rmf)
             os.system(rmfcat_string)
-        except subprocess.CalledProcessError:
-            # Otherwise, we need to use RMF
+    
+        # otherwise, fall back on RMF
+        else:
             orh = RMF.create_rmf_file(output_rmf)
-
-            for n in range(len(filenames)):
-                rh = RMF.open_rmf_file_read_only(filenames[n])
-                scorescat_string += scorefiles[n] +" "
+            for n, fn in enumerate(filenames):
+                rh = RMF.open_rmf_file_read_only(fn)
                 if n==0:
                     RMF.clone_file_info(rh, orh)
                     RMF.clone_hierarchy(rh, orh)
                     RMF.clone_static_frame(rh, orh)
-                orh.set_description(orh.get_description() +"\n" + rh.get_description())
+                orh.set_description(orh.get_description() +'\n' + rh.get_description())
                 for f in rh.get_frames():
                     rh.set_current_frame(f)
                     orh.add_frame(rh.get_name(f), rh.get_type(f))
                     RMF.clone_loaded_frame(rh,orh)
-
+        
         # Concatenate all score files to the same file
-        scorescat_string += "> "+ analysis_dir + "/" + scores_prefix +".txt"
+        scorescat_string = 'cat %s > %s' % (' '.join(scorefiles), output_score_file) 
         os.system(scorescat_string)
 
         # Clean up our temporary files
@@ -1076,7 +1068,7 @@ class AnalysisTrajectories(object):
 
         # Initialize output RMF file
         row1 = inf.iloc[0]
-        rmf_file = top_dir+"/"+row1.rmf3_file
+        rmf_flile = os.path.join(top_dir, row1.rmf3_file)
         # Create model and import hierarchies from one of the RMF files
         m = IMP.Model()
         f = RMF.open_rmf_file_read_only(rmf_file)
@@ -1091,7 +1083,7 @@ class AnalysisTrajectories(object):
         # Cycle through models by individual replica so we only open one RMF at a time
         for rep in replicas:
             rep_inf = inf[inf['rmf3_file']==rep]
-            rmf_file = top_dir+"/"+rep
+            rmf_file = os.path.join(top_dir, rep)
             print(top_dir, row1.traj, rep)
             f = RMF.open_rmf_file_read_only(rmf_file)
             IMP.rmf.link_hierarchies(f, [h0])
@@ -1120,17 +1112,14 @@ class AnalysisTrajectories(object):
         del fh_out
         np.savetxt(scores_file, np.array(scores))
 
-    def create_gsms_dir(self, dir):
+    def create_gsms_dir(self, d):
         '''
         Create directories for GSM.
         If already present, rename old one
         '''
-        
-        if not os.path.isdir(dir):
-            os.makedirs(dir)
-        else:
-            os.system('mv '+dir + ' '+dir+'.old_'+str(random.randint(0,100)))
-            os.makedirs(dir)
+        if os.path.isdir(d):
+            os.rename(d, '%s.old_%d' % (d, random.randint(0,100)))
+        os.makedirs(d, exist_ok=True)
 
     def plot_scores_distributions(self, HA, HB, cl):
         '''
@@ -1415,7 +1404,6 @@ class AnalysisTrajectories(object):
         for output table
         '''
         
-
         self.Sampling['Number_of_replicas'] = list(set(self.Sampling['Number_of_replicas']))[0]
         self.Sampling['N_total'] = np.sum(self.Sampling['N_total'])
         self.Sampling['N_equilibrated'] = np.sum(self.Sampling['N_equilibrated'])
