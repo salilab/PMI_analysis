@@ -11,6 +11,7 @@ import os
 import gc
 import math
 import glob
+import shutil
 import random
 import itertools
 import subprocess
@@ -42,22 +43,67 @@ class AnalysisTrajectories(object):
     def __init__(self,
                  out_dirs,
                  dir_name = 'run_',
-                 out_name = 'output',
                  analysis_dir = 'analysis',
-                 nproc=6,
-                 nskip=200):
+                 detect_equilibration=True,
+                 burn_in=1000,
+                 nskip=200,
+                 nproc=1,
+                 plot_fmt='pdf'):
+        
+        '''
+        Analyze the ensemble of models obtained after structural sampling by
+        filtering out the bad scoring models, and clustering the good scoring
+        models according to one or multiple score terms, thereby obtaining
+        a set of representative good scoring models that can be used to
+        subsequently compute sampling precision and model precision [using the
+        sampcon module].
+
+        @param out_dirs: list of directories containing the trajectory (rmf
+        files and stat files) for each independent run.
+        
+        @param dir_name: prefix for all directories containing structural 
+        sampling runs. Usually these are named as <prefix>1, <prefix>2, etc.
+        Default is "run_"
+        
+        @analysis_dir: name of output directory where all analysis results will
+        be stored. Default is "analysis".
+        
+        @detect_equilibration: if True, the equilibration period is rigorously
+        determined from the trajectory of all scores using statistical inefficiency measures. Default is True.
+        
+        @burn_in: a total of <burn_in> number of frames are always discarded
+        from the beginning of the trajectory, when calculating statistics.
+        Default is 1000.
+        
+        @nskip: skips every <nskip> frames when calculating statistics.
+        Default is 200.
+        
+        @nproc: number of processors to work on parallely (uses the python multiprocess module). Default is 1.
+        
+        @plot_fmt: file extensions for all plots created. Default is pdf.
+        '''
 
         self.out_dirs = [os.path.abspath(d) for d in out_dirs]
         self.dir_name = dir_name
         self.analysis_dir = os.path.abspath(analysis_dir)
+        self.detect_equilibration = detect_equilibration
         self.nproc = nproc
         self.nskip = nskip
+        self.th = burn_in
+        self.plot_fmt = plot_fmt
+
         self.restraint_names = {}
         self.all_score_fields = []
-
-        self.th = 1000
         self.rerun = False
-
+        
+        # report if equilibration detection has been requested
+        if not self.detect_equilibration:
+            print('Not running rigorous equilibration check.')
+        
+        # report burn-in
+        if self.th > 0:
+            print('Discarding %d (burn-in) frames from the beginning of each independent run' % self.th)
+                
         # Create analysis dir if missing
         os.makedirs(self.analysis_dir, exist_ok=True)
         
@@ -126,6 +172,7 @@ class AnalysisTrajectories(object):
         self.sum_MembraneExclusion_restraint = True
         self.sum_MembraneSurfaceLocation_restraint = True
         self.sum_EM_restraint = False
+        self.sum_score_only_restraint = {}
         
         self.Multiple_psi_values = False
 
@@ -242,10 +289,11 @@ class AnalysisTrajectories(object):
         self.restraint_names['MembraneSurfaceLocation']='MSL'
         #self.MembraneSurfaceLocation_restraint = True
 
-    def set_analyze_score_only_restraint(self, handle, short_name):
+    def set_analyze_score_only_restraint(self, handle, short_name, do_sum=True):
         self.restraint_handles.append(handle)
         self.restraint_names[handle]=short_name
         self.score_only_restraint = True
+        self.sum_score_only_restraint[short_name] = do_sum
         
     def set_select_by_Total_score(self, score_cutoff):
         self.select_Total_score = True
@@ -456,6 +504,21 @@ class AnalysisTrajectories(object):
             MSL_sum = pd.Series(self.add_restraint_type(DF, 'MSL_'))
             DF = DF.assign(MSL_sum=MSL_sum.values)
     
+        # if some score only type custom restraints defined by the user 
+        # need to be summed. Because of the do_sum flag available while
+        # calling the set_analyze_score_only_restraint() method on the 
+        # user defined restraint, they don't need to separately handled
+        # in read_traj_info. If you don't want the sum to be analyzed, just
+        # don't ever compute it by setting do_sum = False. 
+        if self.score_only_restraint:
+            for key, do_sum in self.sum_score_only_restraint.items():
+                prefix = key + "_"
+                all_restraint = [res for res in score_names if prefix in res]
+                if len(all_restraint)>1 and do_sum:
+                    this_restraint_sum = pd.Series(self.add_restraint_type(DF, prefix))
+                    sum_dict = {prefix +"sum": this_restraint_sum.values}
+                    DF = DF.assign(**sum_dict)
+                        
         # Get distance fields
         if len(dist_names)>0:
             S_dist = np.array(S_dist)
@@ -537,28 +600,32 @@ class AnalysisTrajectories(object):
             # Also add nuisances parameter
             sel_entries += [v for v in S_tot_scores.columns.values if 'Psi' in v and 'sum' not in v]
             
-            # Detect equilibration time
+            # Detect equilibration time if requested
             ts_eq = []
-            for r in sel_entries:
-                try:
-                    [t, g, N] = detectEquilibration(np.array(S_tot_scores[r].loc[self.th:]), nskip=self.nskip)
-                    ts_eq.append(t)
-                except:
-                    ts_eq.append(0)
-            print('Trajectory, ts_eqs: ',traj, ts_eq)
-            ts_max = np.max(ts_eq)+self.th
-            self.Sampling['N_equilibrated'] = self.Sampling['N_equilibrated'] + [n_frames - ts_max] 
+            if self.detect_equilibration:
+                for r in sel_entries:
+                    try:
+                        [t, g, N] = detectEquilibration(np.array(S_tot_scores[r].loc[self.th:]), nskip=self.nskip)
+                        ts_eq.append(t)
+                    except:
+                        ts_eq.append(0)
+                print('Trajectory, ts_eqs: ',traj, ts_eq)
+            else:
+                ts_eq = [0]*len(sel_entries)
+            
+            ts_max = np.max(ts_eq) + self.th
+            self.Sampling['N_equilibrated'] = self.Sampling['N_equilibrated'] + [n_frames - ts_max]
                 
             # Plot the scores and restraint satisfaction
-            file_out = 'plot_scores_%s.pdf'%(traj_number)
+            file_out = 'plot_scores_%s.%s'%(traj_number, self.plot_fmt)
             self.plot_scores_restraints(S_tot_scores[['MC_frame']+sel_entries], ts_eq, file_out)
         
             if self.pEMAP_restraint_new:
-                file_out_pemap = 'plot_pEMAP_%s.pdf'%(traj_number) 
+                file_out_pemap = 'plot_pEMAP_%s.%s'%(traj_number, self.plot_fmt) 
                 self.plot_pEMAP_satisfaction(S_info, file_out_pemap)
 
             if self.Occams_restraint:
-                file_out_occams = 'plot_Occams_satisfaction_%s.pdf'%(traj_number)             
+                file_out_occams = 'plot_Occams_satisfaction_%s.%s'% (traj_number, self.plot_fmt)             
                 self.plot_Occams_satisfaction(S_info, file_out_occams)
                 
             # Check how many XLs are satisfied
@@ -701,10 +768,11 @@ class AnalysisTrajectories(object):
 
         all_dfs = [self.S_all[dd] for dd in np.sort(self.S_all.keys())]
         S_comb = pd.concat(all_dfs)
-       
-        print('All available fields: ', S_comb.columns.values) 
+        
         S_comb_sel = S_comb[selected_scores].iloc[::skip]
         S_comb_all = S_comb.iloc[::skip]       
+        print('All available fields: ', S_comb.columns.values)
+        print('Fields selected for HDBSCAN clustering: ', S_comb_sel.columns.values)
 
         hdbsc = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size,
                                 min_samples=min_samples).fit(S_comb_sel)
@@ -828,7 +896,7 @@ class AnalysisTrajectories(object):
                 axes[1].set_ylim([0,n_max])             
 
                 pl.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.5)
-                fig.savefig(os.path.join(self.analysis_dir,'plot_run_models_cluster'+str(cl)+'.pdf'))
+                fig.savefig(os.path.join(self.analysis_dir,'plot_run_models_cluster'+str(cl)+'.'+self.plot_fmt))
                 pl.close()
         
     def write_hdbscan_clustering(self, S_comb):
@@ -916,7 +984,7 @@ class AnalysisTrajectories(object):
             
             
         pl.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
-        fig.savefig(os.path.join(self.analysis_dir,'plot_clustering_scores.png')) 
+        fig.savefig(os.path.join(self.analysis_dir,'plot_clustering_scores'+'.'+self.plot_fmt)) 
         pl.close()
         
     def do_extract_models(self, gsms_info, filename, gsms_dir):
@@ -1035,6 +1103,7 @@ class AnalysisTrajectories(object):
     
         # otherwise, fall back on RMF
         else:
+            print("rmf_cat binary not found on path. Adding frames from output rmf files for each parallel chunk using the RMF library (this will be slow!)")
             orh = RMF.create_rmf_file(output_rmf)
             for n, fn in enumerate(filenames):
                 rh = RMF.open_rmf_file_read_only(fn)
@@ -1068,7 +1137,7 @@ class AnalysisTrajectories(object):
 
         # Initialize output RMF file
         row1 = inf.iloc[0]
-        rmf_flile = os.path.join(top_dir, row1.rmf3_file)
+        rmf_file = os.path.join(top_dir, row1.traj, row1.rmf3_file)
         # Create model and import hierarchies from one of the RMF files
         m = IMP.Model()
         f = RMF.open_rmf_file_read_only(rmf_file)
@@ -1083,8 +1152,7 @@ class AnalysisTrajectories(object):
         # Cycle through models by individual replica so we only open one RMF at a time
         for rep in replicas:
             rep_inf = inf[inf['rmf3_file']==rep]
-            rmf_file = os.path.join(top_dir, rep)
-            print(top_dir, row1.traj, rep)
+            rmf_file = os.path.join(top_dir, row1.traj, rep)
             f = RMF.open_rmf_file_read_only(rmf_file)
             IMP.rmf.link_hierarchies(f, [h0])
             for (row_id, row) in rep_inf.iterrows():
@@ -1191,7 +1259,7 @@ class AnalysisTrajectories(object):
         ax.set_title('Convergence of scores')
 
         pl.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.5)
-        fig.savefig(os.path.join(self.analysis_dir,'plot_scores_convergence_cluster'+str(cl)+'.pdf')) 
+        fig.savefig(os.path.join(self.analysis_dir,'plot_scores_convergence_cluster'+str(cl)+'.'+self.plot_fmt)) 
         pl.close()
 
         return n
@@ -1281,7 +1349,7 @@ class AnalysisTrajectories(object):
             S_info = S_info.assign(XLs_satif=pd.Series(XLs_satif))
             XLs_satif_fields.append('XLs_satif')
 
-        file_out_xls = 'plot_XLs_%s.pdf'%(traj_number)
+        file_out_xls = 'plot_XLs_%s.%s'%(traj_number, self.plot_fmt)
         self.plot_XLs_satisfaction(S_info, ts_max, file_out_xls)
         
         return S_info
@@ -1471,9 +1539,9 @@ class AnalysisTrajectories(object):
     def boxplot_XLs_distances(self, cluster = 0, type_XLs = None, cutoff = 30.0):
 
         if type_XLs:
-            file_out = 'plot_XLs_distance_distributions_cl'+str(cluster)+'_'+str(type_XLs)+'.pdf'
+            file_out = 'plot_XLs_distance_distributions_cl'+str(cluster)+'_'+str(type_XLs)+'.' + self.plot_fmt
         else:
-            file_out = 'plot_XLs_distance_distributions_cl'+str(cluster)+'.pdf'
+            file_out = 'plot_XLs_distance_distributions_cl'+str(cluster)+'.' + self.plot_fmt
         
         if type_XLs:
             dist_columns = [x for x in self.S_comb_dist_clustering.columns.values if ('Distance_' in x) and (type_XLs in x)]
@@ -1542,9 +1610,9 @@ class AnalysisTrajectories(object):
 
         # Plot histogram of best cluster distances
         if type_XLs:
-            file_out_hist = 'plot_XLs_distance_histogram_cl'+str(cluster)+'_'+str(type_XLs)+'.pdf'
+            file_out_hist = 'plot_XLs_distance_histogram_cl'+str(cluster)+'_'+str(type_XLs)+'.' + self.plot_fmt
         else:
-            file_out_hist = 'plot_XLs_distance_histogram_cl'+str(cluster)+'.pdf'
+            file_out_hist = 'plot_XLs_distance_histogram_cl'+str(cluster)+'.' + self.plot_fmt
         self.plot_XLs_satisfaction_histogram(min_all, cutoff, file_out_hist)
 
     def plot_XLs_satisfaction_histogram(self, min_all, cutoff, file_out_hist):
