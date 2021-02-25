@@ -45,8 +45,8 @@ class AnalysisTrajectories(object):
                  dir_name = 'run_',
                  analysis_dir = 'analysis',
                  detect_equilibration=True,
-                 burn_in=1000,
-                 nskip=200,
+                 burn_in_fraction=0.02,
+                 nskip=20,
                  nproc=1,
                  plot_fmt='pdf'):
         
@@ -71,14 +71,12 @@ class AnalysisTrajectories(object):
         @detect_equilibration: if True, the equilibration period is rigorously
         determined from the trajectory of all scores using statistical inefficiency measures. Default is True.
         
-        @burn_in: a total of <burn_in> number of frames are always discarded
-        from the beginning of the trajectory, when calculating statistics.
-        Default is 1000.
+        @burn_in_fraction: a <burn_in_fraction> fraction of frames are always discarded from the beginning of the trajectory, when calculating statistics. Default is 0.02 (i.e. 2 % of the total trajectory size).
         
         @nskip: skips every <nskip> frames when calculating statistics.
         Default is 200.
         
-        @nproc: number of processors to work on parallely (uses the python multiprocess module). Default is 1.
+        @nproc: number of processors for parallel execution (uses the python multiprocess module). Default is 1.
         
         @plot_fmt: file extensions for all plots created. Default is pdf.
         '''
@@ -89,7 +87,13 @@ class AnalysisTrajectories(object):
         self.detect_equilibration = detect_equilibration
         self.nproc = nproc
         self.nskip = nskip
-        self.th = burn_in
+        self.burn_in_frac = burn_in_fraction
+
+        # check if plot_fmt is supported
+        fig = pl.figure()
+        supported_fmts = list(plt.gcf().canvas.get_supported_filetypes().keys())
+        if plot_fmt not in supported_fmts:
+            raise IOError("plot_fmt not found in supported matplotlib file types:", supported_fmts)
         self.plot_fmt = plot_fmt
 
         self.restraint_names = {}
@@ -98,14 +102,15 @@ class AnalysisTrajectories(object):
         
         # report if equilibration detection has been requested
         if not self.detect_equilibration:
-            print('Not running rigorous equilibration check.')
+            print('Not running equilibration check.')
         
         # report burn-in
-        if self.th > 0:
-            print('Discarding %d (burn-in) frames from the beginning of each independent run' % self.th)
+        if self.burn_in_frac > 0:
+            print('Considering %1.1f fraction of frames from the beginning of each independent run as the burn-in phase and discarding them' % self.burn_in_frac)
                 
         # Create analysis dir if missing
-        os.makedirs(self.analysis_dir, exist_ok=True)
+        if not os.path.isdir(self.analysis_dir):
+            os.mkdir(self.analysis_dir)
         
         # For multiprocessing
         self.manager = mp.Manager()
@@ -125,8 +130,8 @@ class AnalysisTrajectories(object):
         self.Validation = self.manager.dict()
 
         # Sample stat file
-        stat_files = glob.glob(os.path.join(self.out_dirs[0], 'stat.*.out'))
-        stat_files.sort()
+        stat_file_str = os.path.join(self.out_dirs[0], 'stat.*.out')
+        stat_files = sorted(glob.glob(stat_file_str))
 
         # Define with restraints to analyze
         self.Connectivity_restraint = False
@@ -355,7 +360,9 @@ class AnalysisTrajectories(object):
         ''' Read database '''
         DB = {}
         i = 0
-        for line in open(db_file):
+        with open(db_file, "r") as of:
+            db_lines = of.readlines()
+        for line in db_lines:
             vals =  line.split()
             DB[str(i)] = vals
             i  += 1
@@ -364,7 +371,9 @@ class AnalysisTrajectories(object):
     def get_keys(self, stat_file):
         ''' Get all keys in stat file '''
         
-        for line in open(stat_file).readlines():
+        with open(stat_file, "r") as of:
+            stat_file_lines = of.readlines()
+        for line in stat_file_lines:
             d = eval(line)
             klist = list(d.keys())
             # check if it is a stat2 file
@@ -443,7 +452,10 @@ class AnalysisTrajectories(object):
             info_names, info_fields = self.get_info_fields(stat2_dict)
 
             line_number=0
-            for line in open(sf).readlines():
+            with open(sf, "r") as of:
+                sf_lines = of.readlines()
+
+            for line in sf_lines:
                 line_number += 1
                 try:
                     d = eval(line)
@@ -514,7 +526,7 @@ class AnalysisTrajectories(object):
             for key, do_sum in self.sum_score_only_restraint.items():
                 prefix = key + "_"
                 all_restraint = [res for res in score_names if prefix in res]
-                if len(all_restraint)>1 and do_sum:
+                if len(all_restraint) > 1 and do_sum:
                     this_restraint_sum = pd.Series(self.add_restraint_type(DF, prefix))
                     sum_dict = {prefix +"sum": this_restraint_sum.values}
                     DF = DF.assign(**sum_dict)
@@ -561,8 +573,7 @@ class AnalysisTrajectories(object):
             else:
                 traj = 0
                 traj_number = 0
-            stat_files = glob.glob(os.path.join(out, 'stat.*.out'))
-            stat_files.sort()
+            stat_files = sorted(glob.glob(os.path.join(out, 'stat.*.out')))
             self.Sampling['Number_of_replicas'] = self.Sampling['Number_of_replicas'] + [len(stat_files)]
         
             # Read all stat files of trajectory
@@ -570,9 +581,10 @@ class AnalysisTrajectories(object):
                                                                     stat_files)
 
             n_frames = len(S_tot_scores)
+            burn_in = int(self.burn_in_frac * n_frames)
             print('The mean score, min score, and n frames are: ', traj_number,
-                  np.mean(S_tot_scores['Total_Score'].iloc[self.th:]),
-                  np.min(S_tot_scores['Total_Score'].iloc[self.th:]),
+                  np.mean(S_tot_scores['Total_Score'].iloc[burn_in:]),
+                  np.min(S_tot_scores['Total_Score'].iloc[burn_in:]),
                   n_frames)
             self.Sampling['N_total'] = self.Sampling['N_total'] + [n_frames]
             
@@ -605,20 +617,20 @@ class AnalysisTrajectories(object):
             if self.detect_equilibration:
                 for r in sel_entries:
                     try:
-                        [t, g, N] = detectEquilibration(np.array(S_tot_scores[r].loc[self.th:]), nskip=self.nskip)
+                        [t, g, N] = detectEquilibration(np.array(S_tot_scores[r].loc[burn_in:]), nskip=self.nskip)
                         ts_eq.append(t)
-                    except:
+                    except (ValueError, TypeError):
                         ts_eq.append(0)
                 print('Trajectory, ts_eqs: ',traj, ts_eq)
             else:
                 ts_eq = [0]*len(sel_entries)
             
-            ts_max = np.max(ts_eq) + self.th
+            ts_max = np.max(ts_eq) + burn_in
             self.Sampling['N_equilibrated'] = self.Sampling['N_equilibrated'] + [n_frames - ts_max]
                 
             # Plot the scores and restraint satisfaction
             file_out = 'plot_scores_%s.%s'%(traj_number, self.plot_fmt)
-            self.plot_scores_restraints(S_tot_scores[['MC_frame']+sel_entries], ts_eq, file_out)
+            self.plot_scores_restraints(S_tot_scores[['MC_frame']+sel_entries], ts_eq, burn_in, file_out)
         
             if self.pEMAP_restraint_new:
                 file_out_pemap = 'plot_pEMAP_%s.%s'%(traj_number, self.plot_fmt) 
@@ -672,7 +684,7 @@ class AnalysisTrajectories(object):
         '''
         return [k for k in dict.keys() if dict[k]==val]
     
-    def plot_scores_restraints(self, selected_scores, ts_eq, file_out):
+    def plot_scores_restraints(self, selected_scores, ts_eq, burn_in, file_out):
         '''
         For each trajectory plot all restraint scores
         '''
@@ -683,7 +695,7 @@ class AnalysisTrajectories(object):
         fig, ax = pl.subplots(figsize=(2.0*n_res, 4.0), nrows=2, ncols=n_res)
         axes = ax.flatten()
         for i, c in enumerate(selected_scores.columns.values[1:]):
-            axes[i].plot(selected_scores['MC_frame'].loc[self.th::10], selected_scores[c].loc[self.th::10], color='b',alpha=0.5)
+            axes[i].plot(selected_scores['MC_frame'].loc[burn_in::10], selected_scores[c].loc[burn_in::10], color='b',alpha=0.5)
             axes[i].axvline(ts_eq[i], color='grey')
             axes[i].set_title(c, fontsize=14)
             axes[i].set_xlabel('Step',fontsize=12)
@@ -984,7 +996,8 @@ class AnalysisTrajectories(object):
             
             
         pl.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
-        fig.savefig(os.path.join(self.analysis_dir,'plot_clustering_scores'+'.'+self.plot_fmt)) 
+        fig.savefig(
+            os.path.join(self.analysis_dir,'plot_clustering_scores.png'))
         pl.close()
         
     def do_extract_models(self, gsms_info, filename, gsms_dir):
@@ -1099,27 +1112,14 @@ class AnalysisTrajectories(object):
             # concatenate RMF files
             rmfcat_string = 'rmf_cat %s %s' % (' '.join(filenames), output_rmf)
             print('Concatenating', len(filenames), 'RMF files to', output_rmf)
-            os.system(rmfcat_string)
-    
-        # otherwise, fall back on RMF
+            subprocess.check_call(['rmf_cat'] + filenames + [output_rmf])
         else:
-            print("rmf_cat binary not found on path. Adding frames from output rmf files for each parallel chunk using the RMF library (this will be slow!)")
-            orh = RMF.create_rmf_file(output_rmf)
-            for n, fn in enumerate(filenames):
-                rh = RMF.open_rmf_file_read_only(fn)
-                if n==0:
-                    RMF.clone_file_info(rh, orh)
-                    RMF.clone_hierarchy(rh, orh)
-                    RMF.clone_static_frame(rh, orh)
-                orh.set_description(orh.get_description() +'\n' + rh.get_description())
-                for f in rh.get_frames():
-                    rh.set_current_frame(f)
-                    orh.add_frame(rh.get_name(f), rh.get_type(f))
-                    RMF.clone_loaded_frame(rh,orh)
+            raise RuntimeError("rmf_cat binary not found on path.")
         
-        # Concatenate all score files to the same file
-        scorescat_string = 'cat %s > %s' % (' '.join(scorefiles), output_score_file) 
-        os.system(scorescat_string)
+        with open(output_score_file, 'wb') as outf:
+            for scorefile in scorefiles:
+                with open(scorefile, 'rb') as scoref:
+                    shutil.copyfileobj(scoref, outf)
 
         # Clean up our temporary files
         if clean_rmfs:

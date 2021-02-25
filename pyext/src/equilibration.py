@@ -88,7 +88,7 @@ def statisticalInefficiency_multiscale(A_n, B_n=None, fast=False, mintime=3):
 
     # Be sure A_n and B_n have the same dimensions.
     if(A_n.shape != B_n.shape):
-        raise Exception('A_n and B_n must have same dimensions.')
+        raise ValueError('A_n and B_n must have same dimensions.')
 
     # Initialize statistical inefficiency estimate with uncorrelated value.
     g = 1.0
@@ -106,7 +106,7 @@ def statisticalInefficiency_multiscale(A_n, B_n=None, fast=False, mintime=3):
 
     # Trap the case where this covariance is zero, and we cannot proceed.
     if(sigma2_AB == 0):
-        raise ParameterError('Sample covariance sigma_AB^2 = 0 -- cannot compute statistical inefficiency')
+        raise ValueError('Sample covariance sigma_AB^2 = 0 -- cannot compute statistical inefficiency')
 
     # Accumulate the integrated correlation time by computing the normalized correlation time at
     # increasing values of t.  Stop accumulating if the correlation function goes negative, since
@@ -181,7 +181,7 @@ def statisticalInefficiency_geyer(A_n, method='pos'):
     """
 
     if method not in ['pos', 'dec', 'con']:
-        raise Exception("Unknown method '%s'; must be one of ['pos', 'dec', 'con']" % method)
+        raise TypeError("Unknown method '%s'; must be one of ['pos', 'dec', 'con']" % method)
 
     # Create numpy copies of input arguments.
     A_n = np.array(A_n)
@@ -337,7 +337,7 @@ def detectEquilibration(A_t, nskip=1, method='multiscale'):
     elif method == 'geyer':
         statisticalInefficiency = statisticalInefficiency_geyer
     else:
-        raise Exception("Method must be one of ['multiscale', 'geyer']")
+        raise TypeError("Method must be one of ['multiscale', 'geyer']")
 
     g_t = np.ones([T - 1], np.float32)
     Neff_t = np.ones([T - 1], np.float32)

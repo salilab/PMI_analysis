@@ -17,12 +17,12 @@ AT = AnalysisTrajectories(out_dirs,
                           dir_name = 'run_',
                           analysis_dir = analysis_dir,
                           detect_equilibration=True,
-                          burn_in=1000,
-                          nskip=200,
+                          burn_in_fraction=0.02,
+                          nskip=20,
                           nproc=1,
                           plot_fmt='pdf')
 ```
-The minimum set of arguments to specify are ```dir_name```: the prefix of the run folders, ```analysis_dir```: the directory where all analysis output will be written, and ```nproc```: the number of processors that are used to do parallel I/O. Additional options are: ```detect_equilibration``` which when set to ```False``` turns off rigorous statistical determination of the burn-in  or equilibration phase and instead just discards a constant ```burn_in``` frames from each independent run, to calculate statistics. ```nskip``` is used to *thin* out the samples collected for analysis, i.e. every ```nskip```^th  frame is selected. Finally, ```plot_fmt``` specifies the file extension of all matplotlib figures generated. You should only set ```detect_equilibration=False``` if you are testing your analysis script and need it to run fast without waiting for calculating the exact length of the monte carlo burn-in phase. 
+The minimum set of arguments to specify are ```dir_name```: the prefix of the run folders, ```analysis_dir```: the directory where all analysis output will be written, and ```nproc```: the number of processors that are used to do parallel I/O. Additional options are: ```detect_equilibration``` which when set to ```False``` turns off rigorous statistical determination of the burn-in  or equilibration phase and instead just discards a ```burn_in_fraction``` (default 2% of the trajectory size) fraction of frames from the beginning of each independent run, to calculate statistics. ```nskip``` is used to *thin* out the samples collected for analysis, i.e. every ```nskip```^th  frame is selected. Finally, ```plot_fmt``` specifies the file extension of all matplotlib figures generated. You should only set ```detect_equilibration=False``` if you are testing your analysis script and need it to run fast without waiting for calculating the exact length of the monte carlo burn-in phase. 
 
 2. Add the restraints that you want to be analyzed:
 
