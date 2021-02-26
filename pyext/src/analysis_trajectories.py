@@ -19,7 +19,7 @@ import pandas as pd
 import numpy as np
 import multiprocessing as mp
 from scipy import stats
-from equilibration import *
+from equilibration import detectEquilibration
 
 import matplotlib as mpl
 mpl.use('Agg')
@@ -90,10 +90,9 @@ class AnalysisTrajectories(object):
         self.burn_in_frac = burn_in_fraction
 
         # check if plot_fmt is supported
-        fig = pl.figure()
-        supported_fmts = list(plt.gcf().canvas.get_supported_filetypes().keys())
+        supported_fmts = list(pl.gcf().canvas.get_supported_filetypes().keys())
         if plot_fmt not in supported_fmts:
-            raise IOError("plot_fmt not found in supported matplotlib file types:", supported_fmts)
+            raise KeyError("plot_fmt not found in supported matplotlib file types:", supported_fmts)
         self.plot_fmt = plot_fmt
 
         self.restraint_names = {}
@@ -106,7 +105,7 @@ class AnalysisTrajectories(object):
         
         # report burn-in
         if self.burn_in_frac > 0:
-            print('Considering %1.1f fraction of frames from the beginning of each independent run as the burn-in phase and discarding them' % self.burn_in_frac)
+            print('Considering %1.2f fraction of frames from the beginning of each independent run as the burn-in phase and discarding them' % self.burn_in_frac)
                 
         # Create analysis dir if missing
         if not os.path.isdir(self.analysis_dir):
@@ -1107,15 +1106,16 @@ class AnalysisTrajectories(object):
         output_rmf = os.path.join(analysis_dir, out_rmf_name)
         output_score_file = os.path.join(analysis_dir, scores_prefix+'.txt')
         
-        # use rmf_cat if available
-        if shutil.which('rmf_cat'):
-            # concatenate RMF files
-            rmfcat_string = 'rmf_cat %s %s' % (' '.join(filenames), output_rmf)
-            print('Concatenating', len(filenames), 'RMF files to', output_rmf)
-            subprocess.check_call(['rmf_cat'] + filenames + [output_rmf])
-        else:
+        # check if rmf_cat is available
+        if not shutil.which('rmf_cat'):
             raise RuntimeError("rmf_cat binary not found on path.")
         
+        # concatenate RMF files
+        rmfcat_string = 'rmf_cat %s %s' % (' '.join(filenames), output_rmf)
+        print('Concatenating', len(filenames), 'RMF files to', output_rmf)
+        subprocess.check_call(['rmf_cat'] + filenames + [output_rmf])
+        
+        # concatenate score files
         with open(output_score_file, 'wb') as outf:
             for scorefile in scorefiles:
                 with open(scorefile, 'rb') as scoref:
@@ -1187,7 +1187,7 @@ class AnalysisTrajectories(object):
         '''
         if os.path.isdir(d):
             os.rename(d, '%s.old_%d' % (d, random.randint(0,100)))
-        os.makedirs(d, exist_ok=True)
+        os.mkdir(d)
 
     def plot_scores_distributions(self, HA, HB, cl):
         '''
