@@ -76,7 +76,7 @@ John D. Chodera <john.chodera@choderalab.org>
 
 4. Obtain the statistics of the XLs restraint Psi nuisance parameter use:
 ```
-AT.get_Psi_stats()
+AT.get_psi_stats()
 ```
 
 5. Do HDBSCAN clustering for selected scores and/or nuisance parameters:
