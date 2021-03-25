@@ -829,10 +829,11 @@ class AnalysisTrajectories(object):
 
         all_dfs = [self.S_all[dd] for dd in np.sort(self.S_all.keys())]
         S_comb = pd.concat(all_dfs)
-
+        
+        # Print all available fields before checking if field exists. 
+        print('All available fields: ', S_comb.columns.values)
         S_comb_sel = S_comb[selected_scores].iloc[::skip]
         S_comb_all = S_comb.iloc[::skip]
-        print('All available fields: ', S_comb.columns.values)
         print('Fields selected for HDBSCAN clustering: ',
               S_comb_sel.columns.values)
 
