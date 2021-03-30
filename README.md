@@ -14,8 +14,8 @@ These scripts are used to analyze a series of trajectories, look at their scores
 
 ```python
 AT = AnalysisTrajectories(out_dirs,
-                          dir_name = 'run_',
-                          analysis_dir = analysis_dir,
+                          dir_name='run_',
+                          analysis_dir=analysis_dir,
                           detect_equilibration=True,
                           burn_in_fraction=0.02,
                           nskip=20,
@@ -27,26 +27,26 @@ The minimum set of arguments to specify are ```dir_name```: the prefix of the ru
 2. Add the restraints that you want to be analyzed:
 
 ```python
-XLs_cutoffs = {'DSSO':30.0}
-AT.set_analyze_XLs_restraint(XLs_cutoffs = XLs_cutoffs)
+XLs_cutoffs = {'DSSO': 30.0}
+AT.set_analyze_XLs_restraint(XLs_cutoffs=XLs_cutoffs)
 AT.set_analyze_Connectivity_restraint()
 AT.set_analyze_Excluded_volume_restraint()
 ```
 
-If you set up more than one XLs restraint, you should include the *Multiple_XLs_restraints = True* flag in the analysis and include a cutoff for all of them in the *XLs_cutoffs* dictionary. For example, if you divided the DSSO XLs into a intra-subunit and inter-subunit datasets, there should be two elements in the *XLs_cutoffs* dictionary (even if they have the same cutoff):
+If you set up more than one XLs restraint, you should include the *Multiple_XLs_restraints=True* flag in the analysis and include a cutoff for all of them in the *XLs_cutoffs* dictionary. For example, if you divided the DSSO XLs into a intra-subunit and inter-subunit datasets, there should be two elements in the *XLs_cutoffs* dictionary (even if they have the same cutoff):
 
 ```python
-XLs_cutoffs = {'DSSO_Inter':30.0, 'DSSO_Intra':30.0}
-AT.set_analyze_XLs_restraint(XLs_cutoffs = XLs_cutoffs,
-                             Multiple_XLs_restraints = True)
+XLs_cutoffs = {'DSSO_Inter': 30.0, 'DSSO_Intra': 30.0}
+AT.set_analyze_XLs_restraint(XLs_cutoffs=XLs_cutoffs,
+                             Multiple_XLs_restraints=True)
 ```
 Using the labels you used to setup the restraint and keys.
 
-Similarly, if there is ambiguity in the XLs assignments (i.e. you have multiple copies of the same protein), you should use the *ambiguous_XLs_restraint = True* option:
+Similarly, if there is ambiguity in the XLs assignments (i.e. you have multiple copies of the same protein), you should use the *ambiguous_XLs_restraint=True* option:
 
 ```python
-AT.set_analyze_XLs_restraint(XLs_cutoffs = XLs_cutoffs,
-                             ambiguous_XLs_restraint = True)
+AT.set_analyze_XLs_restraint(XLs_cutoffs=XLs_cutoffs,
+                             ambiguous_XLs_restraint=True)
 ```
 
 If you want to analyze a restraint that is not standard to IMP, you can do so by including the handle associated to that restraint in the stat file. E.g. if your restraint is called ```COMDistanceRestraint_data_Score``` in the stat files produced after sampling (i.e. the restraint *handle*) and you'd like the restraint score to be referred to by a short name, say ```COM``` throughout the various analysis output data-frames:
@@ -105,9 +105,9 @@ After clustering a series of files are written with the information of frames in
 7. To re-rerun the clustering step without having to read all the stat files again, you can read the relevant information from the `all_info_*.csv` files:
 
 ```
-XLs_cutoffs = {'DSSO_Inter':30.0, 'DSSO_Intra':30.0}
+XLs_cutoffs = {'DSSO_Inter': 30.0, 'DSSO_Intra': 30.0}
 AT = AnalysisTrajectories(out_dirs,
-                          analysis_dir = analys_dir,
+                          analysis_dir=analys_dir,
                           nproc=nproc)
 			 
 AT.read_models_info(XLs_cutoffs)
