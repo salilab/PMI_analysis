@@ -55,7 +55,7 @@ color_palette = [u'#4c72b0', u'#55a868', u'#c44e52', u'#8172b2', u'#ccb974',
 class AnalysisTrajectories(object):
     def __init__(self, out_dirs, dir_name='run_', analysis_dir='analysis',
                  detect_equilibration=True, burn_in_fraction=0.02,
-                 nskip=20, nproc=1, number_models_out=29999, plot_fmt='pdf'):
+                 nskip=20, nproc=1, plot_fmt='pdf'):
         '''
         Analyze the ensemble of models obtained after structural sampling by
         filtering out the bad scoring models, and clustering the good scoring
@@ -98,7 +98,6 @@ class AnalysisTrajectories(object):
         self.nproc = nproc
         self.nskip = nskip
         self.burn_in_frac = burn_in_fraction
-        self.number_models_out = number_models_out
 
         # check if plot_fmt is supported
         supported_fmts = list(pl.gcf().canvas.get_supported_filetypes().keys())
@@ -338,11 +337,13 @@ class AnalysisTrajectories(object):
                 else:
                     score_names.append(self.restraint_names[restraint])
                 score_fields += RES.values()
+                print(score_names)
             else:
                 for k, v in RES.items():
                     score_names.append(
                         self.restraint_names[restraint] + '_'
                         + k.split(restraint + '_')[-1])
+                    print(score_names)
                     score_fields += [v]
 
         return score_fields, score_names
@@ -458,6 +459,7 @@ class AnalysisTrajectories(object):
         S_dist = []
         P_info = []
 
+        print('-------- 00000', stat_files)
         for sf in stat_files:
             # Read header
             stat2_dict = self.get_keys(sf)
@@ -823,7 +825,7 @@ class AnalysisTrajectories(object):
             print('No files with XLs info found')
 
     def hdbscan_clustering(self, selected_scores, min_cluster_size=150,
-                           min_samples=5, skip=1):
+                           min_samples=5, skip=1, number_of_models=29999):
         '''
         DO HDBSCAN clustering for selected restraint and/or nuisance parameters
         '''
@@ -867,7 +869,7 @@ class AnalysisTrajectories(object):
 
         # Write and plot info from clustering
         self.plot_hdbscan_clustering(S_comb_sel, selected_scores)
-        self.write_hdbscan_clustering(S_comb_all)
+        self.write_hdbscan_clustering(S_comb_all,number_of_models)
         self.plot_hdbscan_runs_info(S_comb_all)
 
         S_comb_sel = S_comb_sel.assign(
@@ -985,7 +987,7 @@ class AnalysisTrajectories(object):
                     'plot_run_models_cluster'+str(cl)+'.'+self.plot_fmt))
                 pl.close()
 
-    def write_hdbscan_clustering(self, S_comb):
+    def write_hdbscan_clustering(self, S_comb, number_of_models = 29999):
 
         '''
         Write the frames information for each cluster
@@ -1033,8 +1035,8 @@ class AnalysisTrajectories(object):
                     'selected_models_B_cluster'+str(cl)+'_detailed.csv'))
 
                 # Select n model from
-                if int(n) > self.number_models_out or len(HH_cluster) > self.number_models_out:
-                    HH_sel = HH_cluster.sample(n=self.number_models_out)
+                if int(n) > 30000 or len(HH_cluster) > 30000:
+                    HH_sel = HH_cluster.sample(n=number_of_models)
                     HH_sel_A = HH_sel[(HH_sel['half'] == 'A')]
                     HH_sel_B = HH_sel[(HH_sel['half'] == 'B')]
                     HH_sel_A.to_csv(os.path.join(
@@ -1151,7 +1153,7 @@ class AnalysisTrajectories(object):
 
     def do_extract_models_single_rmf(
             self, gsms_info, out_rmf_name, traj_dir, analysis_dir,
-            scores_prefix="scores", clean_rmfs=True, sel_state=0):
+            scores_prefix="scores", clean_rmfs=True, state=0):
         '''
         Extract all models to a single RMF file
 
@@ -1181,15 +1183,22 @@ class AnalysisTrajectories(object):
         filenames = []  # RMF file names
         scorefiles = []
 
+        nstates = 3
+        for i in range(3):
+           filenames.append([])
+
+        out_rmf_name_root = out_rmf_name.split('.rmf3')[0]
         for td in traj_dirs:
             split_dfs.append(gsms_info[gsms_info['traj'] == td])
             filenames.append(os.path.join(traj_dir, td, out_rmf_name))
             scorefiles.append(os.path.join(traj_dir, td, scores_prefix+'.txt'))
 
+
+        print(len(filenames), len(split_dfs), len(scorefiles))
         # Setup a list of processes that we want to run
         processes = [mp.Process(target=self.extract_models_to_single_rmf,
                                 args=(split_dfs[x], filenames[x], traj_dir,
-                                      scorefiles[x],sel_state))
+                                      scorefiles[x]))
                      for x in range(len(filenames))]
 
         # Run processes
@@ -1208,6 +1217,7 @@ class AnalysisTrajectories(object):
             raise RuntimeError("rmf_cat binary not found on path.")
 
         # concatenate RMF files
+        # concatenate RMF files
         print('Concatenating', len(filenames), 'RMF files to', output_rmf)
         subprocess.check_call(['rmf_cat'] + filenames + [output_rmf])
 
@@ -1225,15 +1235,13 @@ class AnalysisTrajectories(object):
                 os.remove(sf)
 
     def extract_models_to_single_rmf(self, inf, output_rmf, top_dir,
-                                     scores_file, sel_state=0):
+                                     scores_file):
         # Given a dataframe from get_models_to_extract(), extract these
         # models and place into a single RMF file: output_rmf
 
         scores = []
         i = 0
 
-        
-        
         # Initialize output RMF file
         row1 = inf.iloc[0]
         rmf_file = os.path.join(top_dir, row1.traj, row1.rmf3_file)
@@ -1241,15 +1249,8 @@ class AnalysisTrajectories(object):
         m = IMP.Model()
         f = RMF.open_rmf_file_read_only(rmf_file)
         h0 = IMP.rmf.create_hierarchies(f, m)[0]
-        states = IMP.atom.get_by_type(h0,IMP.atom.STATE_TYPE)
         fh_out = RMF.create_rmf_file(output_rmf)
-        for i,s in enumerate(states):
-            if str(i)==sel_state:
-                print('-------', str(i), sel_state)
-                p = IMP.Particle(m,'System')
-                hier_temp = IMP.atom.Hierarchy.setup_particle(p)
-                hier_temp.add_child(s)
-                IMP.rmf.add_hierarchy(fh_out, hier_temp)
+        IMP.rmf.add_hierarchy(fh_out, h0)
         del f
 
         # Get a list of all the replica rmf3 files
