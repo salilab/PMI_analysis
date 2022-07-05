@@ -28,6 +28,7 @@ License along with this software. If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function, division
 import numpy as np
 
+
 def statisticalInefficiency_multiscale(A_n, B_n=None, fast=False, mintime=3):
     """
     Compute the (cross) statistical inefficiency of (two) timeseries using
