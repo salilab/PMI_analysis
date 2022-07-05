@@ -214,7 +214,7 @@ def statisticalInefficiency_geyer(A_n, method='pos'):
 
     # Compute sequential covariance pairs.
     gamma_pos = list()
-    for i in range(N/2):
+    for i in range(N//2):
         lag1 = 2*i
         gam1 = (A_n[0:(N-lag1)] * A_n[lag1:N]).sum() / N
         lag2 = lag1 + 1
