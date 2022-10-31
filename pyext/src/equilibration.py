@@ -25,6 +25,7 @@ License along with this software. If not, see <http://www.gnu.org/licenses/>.
 
 """
 
+from __future__ import print_function, division
 import numpy as np
 
 
@@ -214,7 +215,7 @@ def statisticalInefficiency_geyer(A_n, method='pos'):
 
     # Compute sequential covariance pairs.
     gamma_pos = list()
-    for i in range(N/2):
+    for i in range(N//2):
         lag1 = 2*i
         gam1 = (A_n[0:(N-lag1)] * A_n[lag1:N]).sum() / N
         lag2 = lag1 + 1
