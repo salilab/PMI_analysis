@@ -113,7 +113,7 @@ def statisticalInefficiency_multiscale(A_n, B_n=None, fast=False, mintime=3):
     sigma2_AB = (dA_n * dB_n).mean()  # standard estimator to ensure C(0) = 1
 
     # Trap the case where this covariance is zero, and we cannot proceed.
-    if(sigma2_AB == 0):
+    if (sigma2_AB == 0):
         raise ValueError('Sample covariance sigma_AB^2 = 0 -- cannot '
                          'compute statistical inefficiency')
 
