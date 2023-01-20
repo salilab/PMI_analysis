@@ -330,7 +330,10 @@ class AnalysisTrajectories(object):
 
         for restraint in self.restraint_handles:
             RES = {stat2_dict[k]: k for k in stat2_dict.keys()
-                   if (restraint in stat2_dict[k])}
+                   if (restraint in stat2_dict[k])
+                   and ('Acceptance'      not in stat2_dict[k] )
+                   and ('StepSize'      not in stat2_dict[k] )}
+            
             if len(RES) == 1:
                 if restraint not in ['MonteCarlo_Nframe', 'rmf_frame_index',
                                      'Total_Score']:
@@ -345,6 +348,7 @@ class AnalysisTrajectories(object):
                         + k.split(restraint + '_')[-1])
                     score_fields += [v]
 
+        
         return score_fields, score_names
 
     def get_distance_fields(self, stat2_dict):
