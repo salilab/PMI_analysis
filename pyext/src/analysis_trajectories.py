@@ -1037,7 +1037,8 @@ class AnalysisTrajectories(object):
                     'selected_models_B_cluster'+str(cl)+'_detailed.csv'))
 
                 # Select n model from
-                if int(n) > self.number_models_out or len(HH_cluster) > self.number_models_out:
+                if (int(n) > self.number_models_out
+                        or len(HH_cluster) > self.number_models_out):
                     HH_sel = HH_cluster.sample(n=self.number_models_out)
                     HH_sel_A = HH_sel[(HH_sel['half'] == 'A')]
                     HH_sel_B = HH_sel[(HH_sel['half'] == 'B')]
@@ -1193,7 +1194,7 @@ class AnalysisTrajectories(object):
         # Setup a list of processes that we want to run
         processes = [mp.Process(target=self.extract_models_to_single_rmf,
                                 args=(split_dfs[x], filenames[x], traj_dir,
-                                      scorefiles[x],sel_state))
+                                      scorefiles[x], sel_state))
                      for x in range(len(filenames))]
 
         # Run processes
@@ -1236,8 +1237,6 @@ class AnalysisTrajectories(object):
         scores = []
         i = 0
 
-        
-        
         # Initialize output RMF file
         row1 = inf.iloc[0]
         rmf_file = os.path.join(top_dir, row1.traj, row1.rmf3_file)
@@ -1245,12 +1244,12 @@ class AnalysisTrajectories(object):
         m = IMP.Model()
         f = RMF.open_rmf_file_read_only(rmf_file)
         h0 = IMP.rmf.create_hierarchies(f, m)[0]
-        states = IMP.atom.get_by_type(h0,IMP.atom.STATE_TYPE)
+        states = IMP.atom.get_by_type(h0, IMP.atom.STATE_TYPE)
         fh_out = RMF.create_rmf_file(output_rmf)
-        for i,s in enumerate(states):
-            if str(i)==sel_state:
+        for i, s in enumerate(states):
+            if str(i) == sel_state:
                 print('-------', str(i), sel_state)
-                p = IMP.Particle(m,'System')
+                p = IMP.Particle(m, 'System')
                 hier_temp = IMP.atom.Hierarchy.setup_particle(p)
                 hier_temp.add_child(s)
                 IMP.rmf.add_hierarchy(fh_out, hier_temp)
