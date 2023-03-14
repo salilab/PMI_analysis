@@ -5,6 +5,7 @@
 """
 from __future__ import print_function
 import IMP
+import RMF
 import IMP.algebra
 import IMP.em
 import IMP.pmi
@@ -15,6 +16,7 @@ import IMP.pmi.analysis
 
 import itertools
 import numpy as np
+import pandas as pd
 import scipy.spatial.distance
 import os
 import random
@@ -26,11 +28,21 @@ import tools
 
 class CMTable(object):
     ''' Compute contacts maps for all models in ensemble '''
-    def __init__(self, GSMs_dir='', clustering_dir='', out_dir='CMs/',
-                 cluster=0, number_of_models=10000, selection=[],
-                 cutoff=16.0, XLs_cutoff=35.0, nproc=10):
+    def __init__(self,
+                 analys_dir,
+                 rmf_A,
+                 rmf_B,
+                 clustering_dir,
+                 cluster,
+                 number_of_models=10000,
+                 selection=[],
+                 cutoff=16.0,
+                 XLs_cutoff=35.0,
+                 nproc=10):
 
-        self.GSMs_dir = GSMs_dir
+        self.analys_dir = analys_dir
+        self.rmf_A = rmf_A
+        self.rmf_B = rmf_B
         self.clustering_dir = clustering_dir
         self.cluster = cluster
         self.number_of_models = number_of_models
@@ -38,9 +50,10 @@ class CMTable(object):
         self.cutoff = cutoff
         self.XLs_cutoff = XLs_cutoff
         self.nproc = nproc
+        self.include_XLs= False
 
         # Contact maps directory
-        self.out_dir = out_dir
+        self.out_dir = os.path.join(clustering_dir, 'CMs')
         if os.path.exists(self.out_dir):
             print('Overwriting ' + self.out_dir)
         else:
@@ -51,18 +64,17 @@ class CMTable(object):
         self.cm_all = self.manager.dict()
         self.Table = self.manager.dict()
         self.contactmap = None
-        self.XL_dict = {}
-
+        
         self.model = IMP.Model()
 
-    def compute_contact_maps_rmf3(self, rmf3, save_matrices=True):
+    def compute_contact_maps_rmf3(self, rmf, save_matrices=True):
         '''
         Compute CM for a single file.
         '''
 
-        self.get_number_of_residues(rmf3)
+        self.get_number_of_residues(rmf)
 
-        self.contact_map_prob_protein_pair([rmf3], 0)
+        self.contact_map_prob_protein_pair([rmf], 0)
         if save_matrices:
             self._write_matrices()
 
@@ -71,29 +83,42 @@ class CMTable(object):
         Compute CM from an ensemble of models
         '''
 
-        # Get rmf3 files
-        self.RC = tools.ReadClustering(self.clustering_dir)
-        rmfs_cluster = self.RC.get_rmfs_cluster(self.cluster)
-        if len(rmfs_cluster) > self.number_of_models:
-            rmfs_cluster = random.sample(rmfs_cluster, self.number_of_models)
+        # Number of frames in A
+        model = IMP.Model()
+        rh = RMF.open_rmf_file_read_only(self.rmf_A)
+        n_frames_A = rh.get_number_of_frames()
+        del model
+        
+        # Get frames info from clustering files
+        frames_A = self.get_frames_cluster(half = 'A')
+        frames_B = self.get_frames_cluster(half = 'B')
+        frames_B = [f - n_frames_A for f in frames_B]
 
-        self.rmf = rmfs_cluster[0]
-        self.number_rmfs = len(rmfs_cluster)
-        self.get_number_of_residues(rmfs_cluster[0])
+        number_of_frames = len(frames_A) + len(frames_B)
+        
+        # Divide frames into groups based on
+        # number of processors
+        nproc2 = int(self.nproc/2.)
+        ND_A = int(np.ceil(len(frames_A)/float(nproc2)))
+        ND_B = int(np.ceil(len(frames_B)/float(nproc2)))
+        frames_A_dict = {}
+        frames_B_dict = {}
+        for k in range(nproc2-1):
+            frames_A_dict[k] = frames_A[(k*ND_A):(k*ND_A+ND_A)]
+            frames_A_dict[nproc2-1] = frames_A[((nproc2-1)*ND_A):(len(frames_A))]
 
-        # Divide rmfs into groups
-        ND = int(np.ceil(len(rmfs_cluster)/float(self.nproc)))
-        rmfs_dict = {}
-        for k in range(self.nproc-1):
-            rmfs_dict[k] = rmfs_cluster[(k*ND):(k*ND+ND)]
-        rmfs_dict[self.nproc-1] = rmfs_cluster[
-            ((self.nproc-1)*ND):(len(rmfs_cluster))]
+        for k in range(nproc2-1):
+            frames_B_dict[k] = frames_B[(k*ND_B):(k*ND_B+ND_B)]
+            frames_B_dict[nproc2-1] = frames_B[((nproc2-1)*ND_B):(len(frames_B))]
 
         # Setup a list of processes that we want to run
-        processes = [mp.Process(target=self.contact_map_prob_protein_pair,
-                                args=(rmfs_dict[x], 0))
-                     for x in range(self.nproc)]
+        processes = [mp.Process(target=self.update_contact_maps,
+                        args=(self.rmf_A, frames_A_dict[x])) for x in range(nproc2)] + \
+                    [mp.Process(target=self.update_contact_maps,
+                        args=(self.rmf_B, frames_B_dict[x])) for x in range(nproc2)]
 
+        # self.contact_map_prob_protein_pair
+        
         # Run processes
         for p in processes:
             p.start()
@@ -102,10 +127,20 @@ class CMTable(object):
         for p in processes:
             p.join()
 
-        self._normalize_matrices()
+        self.normalize_matrices(number_of_frames)
         if save_matrices:
-            self._write_matrices()
+            self.write_matrices()
 
+    def get_frames_cluster(self, half = 'A'):
+        '''
+        Get rmf frames for an imp-sampcon cluster
+        '''
+        frames = []
+        for line in open(f'{self.clustering_dir}/cluster.{self.cluster}.sample_{half}.txt','r'):
+            frames.append(int(line.strip()))
+        return frames
+        
+        
     def get_all_indexes(self, p1):
         '''
         Get all residue indexes in bead
@@ -160,11 +195,18 @@ class CMTable(object):
         contact_map = np.where((distances <= self.cutoff), 1.0, 0)
         return contact_map
 
-    def contact_map_prob_protein_pair(self, rmfs, t):
+    def update_contact_maps(self, rmf_file, frames):
+        '''
+        Iterate over protein pairs and compute distance
+        matrices
+        '''
+        model=IMP.Model()
+        rh = RMF.open_rmf_file_read_only(rmf_file)
+        hier = IMP.rmf.create_hierarchies(rh, model)[0]
 
-        for k, rmf in enumerate(rmfs):
-            model = IMP.Model()
-            hier = IMP.pmi.analysis.get_hiers_from_rmf(model, 0, rmf)[0]
+        # Iterate over frames
+        for fr in frames:
+            IMP.rmf.load_frame(rh, RMF.FrameID(fr))
             prot_dictionary = self._get_particles_at_lowest_resolution(hier)
             for name1, name2 in itertools.combinations_with_replacement(
                     prot_dictionary.keys(), 2):
@@ -175,8 +217,7 @@ class CMTable(object):
                     if str(name1+'-'+name2) not in self.cm_all.keys():
                         self.cm_all[name1+'-'+name2] = cm
                     else:
-                        self.cm_all[name1+'-'+name2] \
-                            = self.cm_all[name1+'-'+name2] + cm
+                        self.cm_all[name1+'-'+name2] += cm
                 else:
                     particles_1 = prot_dictionary[name1]
                     particles_2 = prot_dictionary[name2]
@@ -184,19 +225,18 @@ class CMTable(object):
                     if str(name1+'-'+name2) not in self.cm_all.keys():
                         self.cm_all[name1+'-'+name2] = cm
                     else:
-                        self.cm_all[name1+'-'+name2] \
-                            = self.cm_all[name1+'-'+name2] + cm
-
+                        self.cm_all[name1+'-'+name2] += cm
             # Get XLs distances
-            if len(self.XL_dict) > 0:
+            if self.include_XLs == True:
                 self.get_XLs_distances(hier)
 
-    def _normalize_matrices(self):
-        print('Normalizing', self.number_rmfs)
+    def normalize_matrices(self, number_of_frames):
+        print('Normalizing ...')
         for key in self.cm_all.keys():
-            self.cm_all[key] = self.cm_all[key]/float(self.number_rmfs)
+            self.cm_all[key] = self.cm_all[key]/float(number_of_frames)
 
-    def _write_matrices(self):
+
+    def write_matrices(self):
         '''
         Write all contact maps to files
         '''
@@ -269,6 +309,8 @@ class CMTable(object):
         import matplotlib.pylab as pl
         import matplotlib.gridspec as gridspec
 
+        self.get_number_of_residues(self.rmf_A)
+        
         # Determine the number of residues per protein
         tot = 0
         nres = {}
@@ -307,22 +349,24 @@ class CMTable(object):
                 ax.matshow(M, cmap=pl.get_cmap('Blues'))
                 ax.set_xlim([1, np.shape(M)[1]])
                 ax.set_ylim([1, np.shape(M)[0]])
+                
                 # Plot cross-links by looping over the XL table
-                if len(self.XL_dict) > 0:
+                if self.include_XLs == True:
                     sXLs = {key: value for key, value in self.Table.items()
-                            if (p1 == key[0] and p2 == key[2])
-                            or (p2 == key[0] and p1 == key[2])}
+                            if (p1.split('.')[0] == key[0] and p2.split('.')[0] == key[1])
+                            or (p2.split('.')[0] == key[0] and p1.split('.')[0] == key[1])}
 
                     for xl in sXLs.keys():
                         pp1 = xl[0]
-                        pp2 = xl[2]
-                        r1 = int(xl[1])
+                        pp2 = xl[1]
+                        r1 = int(xl[2])
                         r2 = int(xl[3])
-                        if len(xl) == 4:
+                        if len(xl) > 4:
                             c = int(xl[4])
                             area = 1.5*c
                         else:
                             area = 20.
+
                         if p1 == p2:
                             if np.min(sXLs[xl]) < self.XLs_cutoff:
                                 ax.scatter(r1, r2, s=area, color='greenyellow',
@@ -335,7 +379,7 @@ class CMTable(object):
                                 ax.scatter(r2, r1, s=area, color='orangered',
                                            alpha=0.7, edgecolors='none')
                         else:
-                            if p1 == pp1 and p2 == pp2:
+                            if p1.split('.')[0] == pp1 and p2.split('.')[0] == pp2:
                                 if np.min(sXLs[xl]) < self.XLs_cutoff:
                                     ax.scatter(r2, r1, s=area,
                                                color='greenyellow',
@@ -344,7 +388,7 @@ class CMTable(object):
                                     ax.scatter(r2, r1, s=area,
                                                color='orangered',
                                                alpha=0.7, edgecolors='none')
-                            elif p2 == pp1 and p1 == pp2:
+                            elif p2.split('.')[0] == pp1 and p1.split('.')[0] == pp2:
                                 if np.min(sXLs[xl]) < self.XLs_cutoff:
                                     ax.scatter(r1, r2, s=area,
                                                color='greenyellow',
@@ -430,60 +474,60 @@ class CMTable(object):
             plt.close(fig)
             plt.clf()
 
-    def add_XLs(self, data_file):
+    def add_XLs_data(self,
+                     data_file,
+                     keys = ['Protein1','Protein2','Residue1','Residue2']):
         '''
         Read XLs from csv used for modeling
         '''
-        for i, line in enumerate(open(data_file)):
-            vals = line.split(',')
-            if i > 0:
-                if len(vals) > 4:
-                    self.XL_dict[i] = [vals[0], vals[2], vals[1], vals[3],
-                                       vals[5]]
-                else:
-                    self.XL_dict[i] = [vals[0], vals[2], vals[1], vals[3]]
+        D = pd.read_csv(data_file)
+        D_XLs = D[keys]
+        
+        # Order columns
+        prot_columns = [c for c in D_XLs.columns.values if isinstance(D_XLs.iloc[0][c], str)]
+        other = [c for c in D_XLs.columns.values if c not in prot_columns]
 
+        D_XLs = D[prot_columns+other]
+        # Rename columns
+        D_XLs.rename(columns = {D_XLs.columns[0]:'Protein A',
+                                D_XLs.columns[1]:'Protein B',
+                                D_XLs.columns[2]:'Residue A',
+                                D_XLs.columns[3]:'Residue B'}, inplace=True)
+        self.D_XLs = D_XLs
+
+        self.include_XLs = True
+        
     def get_XLs_distances(self, hier):
 
         all_dist = []
 
-        for key, value in self.XL_dict.items():
+        for i, row in self.D_XLs.iterrows():
 
             ps1 = IMP.atom.Selection(hier,
-                                     molecule=self.XL_dict[key][0],
-                                     residue_index=int(self.XL_dict[key][1]),
+                                     molecule=row['Protein A'],
+                                     residue_index=int(row['Residue A']),
                                      resolution=1).get_selected_particles()
             ps2 = IMP.atom.Selection(hier,
-                                     molecule=self.XL_dict[key][2],
-                                     residue_index=int(self.XL_dict[key][3]),
+                                     molecule=row['Protein B'],
+                                     residue_index=int(row['Residue B']),
                                      resolution=1).get_selected_particles()
-
-            all_dist = []
-            if len(ps1) == 0:
-                ps1 = IMP.atom.Selection(
-                    hier, molecules=self.XL_dict[key][0],
-                    residue_index=int(self.XL_dict[key][1]),
-                    resolution=1).get_selected_particles()
-
-            if len(ps2) == 0:
-                ps2 = IMP.atom.Selection(
-                    hier, molecules=self.XL_dict[key][2],
-                    residue_index=int(self.XL_dict[key][3]),
-                    resolution=1).get_selected_particles()
-            for p1, p2 in itertools.product(ps1, ps2):
-                if p1 == p2:
-                    continue
-                else:
-                    dist = IMP.core.get_distance(IMP.core.XYZ(p1),
-                                                 IMP.core.XYZ(p2))
-                    all_dist.append(dist)
-            if len(all_dist) > 0:
-                if tuple(value) in self.Table.keys():
-                    self.Table[tuple(value)] \
+            
+            if len(ps1)>0 and len(ps2)>0:
+                for p1, p2 in itertools.product(ps1, ps2):
+                    if p1 == p2:
+                        continue
+                    else:
+                        dist = IMP.core.get_distance(IMP.core.XYZ(p1),
+                                                     IMP.core.XYZ(p2))
+                        all_dist.append(dist)
+                if len(all_dist) > 0:
+                    value = row[0:4].values
+                    if tuple(value) in self.Table.keys():
+                        self.Table[tuple(value)] \
                             = np.min([self.Table[tuple(value)],
-                                      np.min(all_dist)])
-                else:
-                    self.Table[tuple(value)] = np.min(all_dist)
+                                    np.min(all_dist)])
+                    else:
+                        self.Table[tuple(value)] = np.min(all_dist)
 
     def read_contact_maps(self, files):
         self.cm_all = {}
