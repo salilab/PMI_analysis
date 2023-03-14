@@ -22,8 +22,6 @@ import os
 import collections
 
 import multiprocessing as mp
-import tools
-
 
 class CMTable(object):
     """Compute contacts maps for all models in ensemble"""
@@ -55,7 +53,7 @@ class CMTable(object):
         # Contact maps directory
         self.out_dir = os.path.join(clustering_dir, "CMs")
         if os.path.exists(self.out_dir):
-            print(f"Overwriting  self.out_dir")
+            print(f"Overwriting {self.out_dir}")
         else:
             os.makedirs(self.out_dir)
 
@@ -104,15 +102,15 @@ class CMTable(object):
         frames_A_dict = {}
         frames_B_dict = {}
         for k in range(nproc2 - 1):
-            frames_A_dict[k] = frames_A[(k * ND_A) : (k * ND_A + ND_A)]
+            frames_A_dict[k] = frames_A[(k * ND_A):(k * ND_A + ND_A)]
             frames_A_dict[nproc2 - 1] = frames_A[
-                ((nproc2 - 1) * ND_A) : (len(frames_A))
+                ((nproc2 - 1) * ND_A):(len(frames_A))
             ]
 
         for k in range(nproc2 - 1):
-            frames_B_dict[k] = frames_B[(k * ND_B) : (k * ND_B + ND_B)]
+            frames_B_dict[k] = frames_B[(k * ND_B):(k * ND_B + ND_B)]
             frames_B_dict[nproc2 - 1] = frames_B[
-                ((nproc2 - 1) * ND_B) : (len(frames_B))
+                ((nproc2 - 1) * ND_B):(len(frames_B))
             ]
 
         # Setup a list of processes that we want to run
@@ -190,7 +188,7 @@ class CMTable(object):
         for p in particles_list:
             residue_indexes = IMP.pmi.tools.get_residue_indexes(p)
             if len(residue_indexes) != 0:
-                for res in range(min(residue_indexes), \
+                for res in range(min(residue_indexes), 
                                  max(residue_indexes) + 1):
                     d = IMP.core.XYZR(p)
                     crd = np.array([d.get_x(), d.get_y(), d.get_z()])
@@ -244,7 +242,7 @@ class CMTable(object):
                     else:
                         self.cm_all[f"{name1}-{name2}"] += cm
             # Get XLs distances
-            if self.include_XLs == True:
+            if self.include_XLs:
                 self.get_XLs_distances(hier)
 
     def normalize_matrices(self, number_of_frames):
@@ -314,8 +312,8 @@ class CMTable(object):
                 k = 0
                 for i in np.transpose(loc):
                     contacts.append(
-                        self.resi_dict[p1][i[1]] + \
-                        self.resi_dict[p2][i[0]] + \
+                        self.resi_dict[p1][i[1]] + 
+                        self.resi_dict[p2][i[0]] + 
                         [frq[k]]
                     )
                     k += 1
@@ -330,7 +328,9 @@ class CMTable(object):
                 )
                 cont_dict[f"{p1}-{p2}"] = contacts
 
-    def plot_contact_maps(self, scaling_factor = 10., filename="contact_map.pdf"):
+    def plot_contact_maps(self,
+                          scaling_factor = 10.,
+                          filename="contact_map.pdf"):
         """
         Plot all protein pairs contact maps
         scaling_factor is used to set the area of the XLs dots
@@ -383,9 +383,9 @@ class CMTable(object):
                     sXLs = {
                         key: value
                         for key, value in self.Table.items()
-                        if (p1.split(".")[0] == key[0] and \
+                        if (p1.split(".")[0] == key[0] and 
                             p2.split(".")[0] == key[1])
-                        or (p2.split(".")[0] == key[0] and \
+                        or (p2.split(".")[0] == key[0] and 
                             p1.split(".")[0] == key[1])
                     }
 
@@ -405,7 +405,7 @@ class CMTable(object):
                                     r1,
                                     r2,
                                     s=area,
-                                    color="greenyellow",
+                                    color="limegreen",
                                     alpha=0.7,
                                     edgecolors="none",
                                 )
@@ -413,7 +413,7 @@ class CMTable(object):
                                     r2,
                                     r1,
                                     s=area,
-                                    color="greenyellow",
+                                    color="limegreen",
                                     alpha=0.7,
                                     edgecolors="none",
                                 )
@@ -442,7 +442,7 @@ class CMTable(object):
                                         r2,
                                         r1,
                                         s=area,
-                                        color="greenyellow",
+                                        color="limegreen",
                                         alpha=0.7,
                                         edgecolors="none",
                                     )
@@ -462,7 +462,7 @@ class CMTable(object):
                                         r1,
                                         r2,
                                         s=area,
-                                        color="greenyellow",
+                                        color="limegreen",
                                         alpha=0.7,
                                         edgecolors="none",
                                     )
@@ -585,7 +585,7 @@ class CMTable(object):
         other = [c for c in D_XLs.columns.values if c not in prot_columns]
 
         D_XLs = D[prot_columns + other]
-        
+
         # Rename columns
         D_XLs = D_XLs.rename(
                       columns={
@@ -623,7 +623,7 @@ class CMTable(object):
                     if p1 == p2:
                         continue
                     else:
-                        dist = IMP.core.get_distance(IMP.core.XYZ(p1), \
+                        dist = IMP.core.get_distance(IMP.core.XYZ(p1), 
                                                      IMP.core.XYZ(p2))
                         all_dist.append(dist)
                 if len(all_dist) > 0:
