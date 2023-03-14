@@ -7,24 +7,22 @@ import os
 sys.path.append('/home/ignacia/SOFTW/PMI_analysis/pyext/src/')
 from contact_maps import CMTable
 
-import glob
-import numpy as np
-import random
-
- 
-
 #####################################################
-# calculate contact frequency
+# Calculate contact frequency
 #####################################################
-CM = CMTable(out_dir = 'analys/CMs_cluster0',
-             GSMs_dir = 'analys/GSMs_2/',
-             clustering_dir = 'analys/clustering_cl1/',
+CM = CMTable(analys_dir = 'analys/',
+             rmf_A = 'analys/A_models_cluster0.rmf3',
+             rmf_B = 'analys/B_models_cluster0.rmf3',
+             clustering_dir = 'analys/clustering/',
              cluster = 0,
-             number_of_models = 15000,    
-             cutoff = 10.0,
+             cutoff = 12.0,
              nproc = 20)
+
+CM.add_XLs_data('XLs_data.csv',
+                keys = ['Protein A',
+                        'Protein B',
+                        'Residue A',
+                        'Residue B',
+                        'Score'])
 CM.compute_contact_maps()
-
-CM.get_close_contacts()
 CM.plot_contact_maps()
-
