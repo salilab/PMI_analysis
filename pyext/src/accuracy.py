@@ -149,8 +149,8 @@ class AccuracyModels(object):
                            & (self.S['MC_frame'] == float(frame))]) > 0:
                         score = self.S[
                             (self.S['traj'] == run)
-                            & (self.S['MC_frame'] == float(frame))
-                            ]['Total_Score'].values[0]
+                            & (self.S['MC_frame'] == float(frame))][
+                                'Total_Score'].values[0]
                         T.append([score, accu])
                         out.write('%s\t%s\t%s \n' % (f_short, accu, score))
                 out.close()
