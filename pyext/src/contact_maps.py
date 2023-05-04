@@ -23,6 +23,7 @@ import collections
 
 import multiprocessing as mp
 
+
 class CMTable(object):
     """Compute contacts maps for all models in ensemble"""
 
@@ -188,7 +189,7 @@ class CMTable(object):
         for p in particles_list:
             residue_indexes = IMP.pmi.tools.get_residue_indexes(p)
             if len(residue_indexes) != 0:
-                for res in range(min(residue_indexes), 
+                for res in range(min(residue_indexes),
                                  max(residue_indexes) + 1):
                     d = IMP.core.XYZR(p)
                     crd = np.array([d.get_x(), d.get_y(), d.get_z()])
@@ -312,8 +313,8 @@ class CMTable(object):
                 k = 0
                 for i in np.transpose(loc):
                     contacts.append(
-                        self.resi_dict[p1][i[1]] + 
-                        self.resi_dict[p2][i[0]] + 
+                        self.resi_dict[p1][i[1]] +
+                        self.resi_dict[p2][i[0]] +
                         [frq[k]]
                     )
                     k += 1
@@ -328,14 +329,13 @@ class CMTable(object):
                 )
                 cont_dict[f"{p1}-{p2}"] = contacts
 
-    def plot_contact_maps(self,
-                          scaling_factor = 10.,
+    def plot_contact_maps(self, scaling_factor=10.,
                           filename="contact_map.pdf"):
         """
         Plot all protein pairs contact maps
         scaling_factor is used to set the area of the XLs dots
         """
-        
+
         import matplotlib as mpl
 
         mpl.use("Agg")
@@ -379,13 +379,13 @@ class CMTable(object):
                 ax.set_ylim([1, np.shape(M)[0]])
 
                 # Plot cross-links by looping over the XL table
-                if self.include_XLs == True:
+                if self.include_XLs:
                     sXLs = {
                         key: value
                         for key, value in self.Table.items()
-                        if (p1.split(".")[0] == key[0] and 
+                        if (p1.split(".")[0] == key[0] and
                             p2.split(".")[0] == key[1])
-                        or (p2.split(".")[0] == key[0] and 
+                        or (p2.split(".")[0] == key[0] and
                             p1.split(".")[0] == key[1])
                     }
 
@@ -435,8 +435,8 @@ class CMTable(object):
                                     edgecolors="none",
                                 )
                         else:
-                            if p1.split(".")[0] == pp1 and \
-                                         p2.split(".")[0] == pp2:
+                            if (p1.split(".")[0] == pp1
+                                    and p2.split(".")[0] == pp2):
                                 if np.min(sXLs[xl]) < self.XLs_cutoff:
                                     ax.scatter(
                                         r2,
@@ -455,8 +455,8 @@ class CMTable(object):
                                         alpha=0.7,
                                         edgecolors="none",
                                     )
-                            elif p2.split(".")[0] == pp1 and \
-                                         p1.split(".")[0] == pp2:
+                            elif (p2.split(".")[0] == pp1
+                                  and p1.split(".")[0] == pp2):
                                 if np.min(sXLs[xl]) < self.XLs_cutoff:
                                     ax.scatter(
                                         r1,
@@ -508,10 +508,8 @@ class CMTable(object):
         import matplotlib.pylab as pl
         import matplotlib.pyplot as plt
 
-        plt.rcParams["xtick.bottom"] = plt.rcParams["xtick.labelbottom"] = \
-                                                                    True
-        plt.rcParams["xtick.top"] = plt.rcParams["xtick.labeltop"] = \
-                                                                True
+        plt.rcParams["xtick.bottom"] = plt.rcParams["xtick.labelbottom"] = True
+        plt.rcParams["xtick.top"] = plt.rcParams["xtick.labeltop"] = True
         # Determine the number of residues per protein
         tot = 0
         nres = collections.OrderedDict()
@@ -579,8 +577,8 @@ class CMTable(object):
 
         # Order columns
         prot_columns = [
-            c for c in D_XLs.columns.values if \
-            isinstance(D_XLs.iloc[0][c], str)
+            c for c in D_XLs.columns.values
+            if isinstance(D_XLs.iloc[0][c], str)
         ]
         other = [c for c in D_XLs.columns.values if c not in prot_columns]
 
@@ -588,13 +586,10 @@ class CMTable(object):
 
         # Rename columns
         D_XLs = D_XLs.rename(
-                      columns={
-                          D_XLs.columns[0]: "Protein A",
-                          D_XLs.columns[1]: "Protein B",
-                          D_XLs.columns[2]: "Residue A",
-                          D_XLs.columns[3]: "Residue B",
-                      },
-        )
+            columns={D_XLs.columns[0]: "Protein A",
+                     D_XLs.columns[1]: "Protein B",
+                     D_XLs.columns[2]: "Residue A",
+                     D_XLs.columns[3]: "Residue B"})
         self.D_XLs = D_XLs
 
         self.include_XLs = True
@@ -623,7 +618,7 @@ class CMTable(object):
                     if p1 == p2:
                         continue
                     else:
-                        dist = IMP.core.get_distance(IMP.core.XYZ(p1), 
+                        dist = IMP.core.get_distance(IMP.core.XYZ(p1),
                                                      IMP.core.XYZ(p2))
                         all_dist.append(dist)
                 if len(all_dist) > 0:
