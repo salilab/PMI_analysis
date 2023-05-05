@@ -1738,13 +1738,18 @@ class AnalysisTrajectories(object):
         for k, v in self.S_info_all.items():
             sel_nuis_mean = list(v[all_nuis].mean())
             sel_nuis_std = list(v[all_nuis].std())
-            DF_stat_nuis = DF_stat_nuis.append(
-                pd.Series(
-                    [k] + sel_nuis_mean + sel_nuis_std,
-                    index=DF_stat_nuis.columns.values,
-                ),
-                ignore_index=True,
-            )
+            # DF_stat_nuis = DF_stat_nuis.append(
+            #     pd.Series(
+            #         [k] + sel_nuis_mean + sel_nuis_std,
+            #         index=DF_stat_nuis.columns.values,
+            #     ),
+            #     ignore_index=True,
+            # )
+            DF_stat_nuis = pd.concat([DF_stat_nuis, pd.DataFrame(pd.Series(
+                                [k] + sel_nuis_mean + sel_nuis_std,
+                                index=DF_stat_nuis.columns.values).to_dict(),
+                                index=[0])],
+                            ignore_index=True)
 
         DF_stat_nuis.to_csv(os.path.join(self.analysis_dir,
                                          "Stat_all_nuisances.csv"))
@@ -2105,9 +2110,11 @@ class AnalysisTrajectories(object):
             ll = v.split("_|")[1]
             label = "|".join(ll.split("|")[2:6])
             if m > 0:
-                XLs_ids = XLs_ids.append(
-                    pd.Series([int(i), m, label], index=columns),
-                    ignore_index=True)
+                XLs_ids = pd.concat([XLs_ids, pd.DataFrame(
+                                pd.Series([int(i), m, label],
+                                    index=columns).to_dict(),
+                                index=[0])],
+                            ignore_index=True)
                 min_all.append(m)
         XLs_ids = XLs_ids.sort_values(by=["mean"])
         labels_ordered = XLs_ids["id"].values
