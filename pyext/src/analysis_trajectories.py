@@ -20,29 +20,42 @@ import matplotlib.gridspec as gridspec
 mpl.rcParams.update({"font.size": 10})
 
 restraints = [
-            ("ConnectivityRestraint", "CR", "Connectivity_restraint"),
-            ("ExcludedVolumeSphere", "EV", "ExcludedVolume_restraint"),
-            ("GaussianEMRestraint", "EM3D", "EM_restraint"),
-            ("DistanceRestraint_Score", "DR", "Distance_restraint"),
-            ("ResidueBindingRestraint_score", "BR", "ResidueBinding_restraint"),
-            ("OccamsPositionalRestraint_Score", "OccPos", "OccamsPos_restraint"),
-            ("pEMapRestraint_Score", "pEMap", "pEMAP_restraint"),
-            ("DOPE_Restraint_score", "DOPE", "DOPE_restraint"),
-            ("MembraneExclusionRestraint", "MEX", "MembraneExclusion_restraint"),
-            ("MembraneSurfaceLocation", "MLS", "MembraneSurfaceLocation_restraint"),
-            ("CrossLinkingMassSpectrometryRestraint_Data_Score", "XL", "XLs_restraint"),
-            ("CrossLinkingMassSpectrometryRestraint_Data_Score", "atomic_XL", "atomic_XLs_restraint"),
+            ("ConnectivityRestraint",
+             "CR", "Connectivity_restraint"),
+            ("ExcludedVolumeSphere",
+             "EV", "ExcludedVolume_restraint"),
+            ("GaussianEMRestraint",
+             "EM3D", "EM_restraint"),
+            ("DistanceRestraint_Score",
+             "DR", "Distance_restraint"),
+            ("ResidueBindingRestraint_score",
+             "BR", "ResidueBinding_restraint"),
+            ("OccamsPositionalRestraint_Score",
+             "OccPos", "OccamsPos_restraint"),
+            ("pEMapRestraint_Score",
+             "pEMap", "pEMAP_restraint"),
+            ("DOPE_Restraint_score",
+             "DOPE", "DOPE_restraint"),
+            ("MembraneExclusionRestraint",
+             "MEX", "MembraneExclusion_restraint"),
+            ("MembraneSurfaceLocation",
+             "MLS", "MembraneSurfaceLocation_restraint"),
+            ("CrossLinkingMassSpectrometryRestraint_Data_Score",
+             "XL", "XLs_restraint"),
+            ("CrossLinkingMassSpectrometryRestraint_Data_Score",
+             "atomic_XL", "atomic_XLs_restraint"),
             ("OccamsRestraint_Score", "Occ", "Occams_restraint")
         ]
 
 
 def generate_n_distinct_colors(n):
     # Generate a palette of N distinct colors using matplotlib's HSV colormap
-    colors = plt.cm.hsv(np.linspace(0, 1, n))    
+    colors = plt.cm.hsv(np.linspace(0, 1, n))
     return colors
 
 
-color_palette =  generate_n_distinct_colors(100)
+color_palette = generate_n_distinct_colors(100)
+
 
 def worker(task):
     method, args = task
@@ -55,7 +68,8 @@ class ParallelProcessor:
 
     def parallel_process(self, tasks):
         # Use a Pool for multiprocessing
-        with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+        with multiprocessing.Pool(
+                processes=multiprocessing.cpu_count()) as pool:
             results = pool.map(worker, tasks)
         return results
 
@@ -121,9 +135,10 @@ class AnalysisTrajectories(object):
         # Create analysis dir if missing
         if not os.path.isdir(self.analysis_dir):
             os.mkdir(self.analysis_dir)
-        
+            
         # check if plot_fmt is supported
-        supported_fmts = list(plt.gcf().canvas.get_supported_filetypes().keys())
+        supported_fmts = list(
+            plt.gcf().canvas.get_supported_filetypes().keys())
         if plot_fmt not in supported_fmts:
             raise KeyError(
                 "plot_fmt not found in supported matplotlib " "file types:",
@@ -171,7 +186,7 @@ class AnalysisTrajectories(object):
         self.restraint_names[handle] = name
         if flag:
             setattr(self, flag, False)
-        
+            
     def set_analyze_XLs_restraint(
         self,
         get_nuisances=True,
@@ -445,11 +460,12 @@ class AnalysisTrajectories(object):
 
         for v in s_vals:
             self.Sampling[v] = []
-        
-        tasks = [(self.read_traj_info, (out_dirs,)) for out_dirs in out_dirs_dict.values()]
+            
+        tasks = [(self.read_traj_info, (out_dirs,))
+                 for out_dirs in out_dirs_dict.values()]
         
         # Execute the tasks in parallel
-        results = processor.parallel_process(tasks)
+        processor.parallel_process(tasks)
         
     def read_stats_detailed(self, traj, stat_files):
         """
@@ -538,16 +554,17 @@ class AnalysisTrajectories(object):
         if self.Distance_restraint and self.sum_Distance_restraint:
             DR_sum = pd.Series(self.add_restraint_type(DF, "DR_"))
             DF = DF.assign(DR_sum=DR_sum.values)
+            
         if (self.MembraneExclusion_restraint
                 and self.sum_MembraneExclusion_restraint):
             MEX_sum = pd.Series(self.add_restraint_type(DF, "MEX_"))
             DF = DF.assign(MEX_sum=MEX_sum.values)
-
+            
         if (self.MembraneExclusion_restraint
                 and self.sum_MembraneExclusion_restraint):
             MSL_sum = pd.Series(self.add_restraint_type(DF, "MSL_"))
             DF = DF.assign(MSL_sum=MSL_sum.values)
-
+            
         # if some score only type custom restraints defined by the user
         # need to be summed. Because of the do_sum flag available while
         # calling the set_analyze_score_only_restraint() method on the
@@ -586,8 +603,6 @@ class AnalysisTrajectories(object):
         else:
             return DF, None, None
         
-        return pd.DataFrame(), None, None
-    
     def add_restraint_type(self, DF, key_id):
         temp_fields = [v for v in DF.columns.values if key_id in v]
         DF_t = DF[temp_fields]
@@ -648,7 +663,8 @@ class AnalysisTrajectories(object):
                     for v in S_tot_scores.columns.values
                     if "EV_" in v and "sum" not in v
                 ]
-            if self.ResidueBinding_restraint and not self.sum_ResdiueBinding_restraint:
+            if (self.ResidueBinding_restraint
+                and not self.sum_ResdiueBinding_restraint):
                 sel_entries += [
                     v
                     for v in S_tot_scores.columns.values
@@ -782,7 +798,6 @@ class AnalysisTrajectories(object):
 
         return 0
     
-
     def get_field_id(self, dict, val):
         """
         For single field, get number of fields in stat file
@@ -798,7 +813,8 @@ class AnalysisTrajectories(object):
         ts_max = np.max(ts_eq)
         n_res = len(selected_scores.columns.values) - 1
 
-        fig, ax = plt.subplots(figsize=(2.0 * n_res, 4.0), nrows=2, ncols=n_res)
+        fig, ax = plt.subplots(
+            figsize=(2.0 * n_res, 4.0), nrows=2, ncols=n_res)
         axes = ax.flatten()
         for i, c in enumerate(selected_scores.columns.values[1:]):
             axes[i].plot(
@@ -2006,8 +2022,8 @@ class AnalysisTrajectories(object):
         n_frac = int(math.ceil(n_xls / float(n_plots)))
 
         # Generate plot
-        fig, ax = plt.subplots(figsize=(12, 6.0 * n_plots), nrows=n_plots,
-                              ncols=1)
+        fig, ax = plt.subplots(
+            figsize=(12, 6.0 * n_plots), nrows=n_plots, ncols=1)
         if n_plots == 1:
             ax = [ax]
         for i in range(n_plots):

@@ -5,7 +5,7 @@ import glob
 import sys
 import os
 
-# Change this to the location of your PMI_analysis folder
+# Change to the location of your PMI_analysis folder
 sys.path.append('/home/ignacia/SOFTW/PMI_analysis/pyext/src/')
 from analysis_trajectories import *
 
@@ -43,12 +43,14 @@ if __name__ == "__main__":
                                     rmf_file_out_A,
                                     top_dir,       
                                     analysis_dir,     
-                                    scores_prefix = f"A_models_cluster{cluster}_{state}")  
+                                    scores_prefix = f"A_models_cluster{cluster}_{state}",
+                                    sel_state = state)  
                          
     AT.do_extract_models_single_rmf(HB,
                                     rmf_file_out_B,
                                     top_dir, analysis_dir,
-                                    scores_prefix = f"B_models_cluster{cluster}_{state}")
+                                    scores_prefix = f"B_models_cluster{cluster}_{state}",
+                                    sel_state = state)
 
 
 

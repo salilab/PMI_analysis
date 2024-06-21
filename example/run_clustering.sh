@@ -7,7 +7,7 @@ export st=0
 
 cp ../A_models_clust${cl}_${st}.txt ../scoresA.txt
 cp ../B_models_clust${cl}_${st}.txt ../scoresB.txt
-cp ../../density_DDI1_DDI2.txt density.txt
+cp ../../density.txt density.txt
 nohup imp_sampcon exhaust --sysname test --p ../ \
                           --rmfA A_models_clust${cl}_${st}_aligned.rmf3 \
                           --rmfB B_models_clust${cl}_${st}_aligned.rmf3 \
