@@ -20,19 +20,19 @@ import matplotlib.gridspec as gridspec
 mpl.rcParams.update({"font.size": 10})
 
 restraints = [
-            ("ConnectivityRestraint", "CR","Connectivity_restraint"), 
-            ("ExcludedVolumeSphere", "EV","ExcludedVolume_restraint"), 
-            ("GaussianEMRestraint", "EM3D","EM_restraint"), 
-            ("DistanceRestraint_Score", "DR","Distance_restraint"), 
-            ("ResidueBindingRestraint_score", "BR","ResidueBinding_restraint"), 
-            ("OccamsPositionalRestraint_Score","OccPos","OccamsPos_restraint"), 
-            ("pEMapRestraint_Score","pEMap","pEMAP_restraint"), 
-            ("DOPE_Restraint_score","DOPE","DOPE_restraint"), 
-            ("MembraneExclusionRestraint","MEX","MembraneExclusion_restraint"), 
-            ("MembraneSurfaceLocation","MLS","MembraneSurfaceLocation_restraint"), 
-            ("CrossLinkingMassSpectrometryRestraint_Data_Score","XL","XLs_restraint"), 
-            ("CrossLinkingMassSpectrometryRestraint_Data_Score","atomic_XL","atomic_XLs_restraint"), 
-            ("OccamsRestraint_Score","Occ","Occams_restraint")
+            ("ConnectivityRestraint", "CR", "Connectivity_restraint"),
+            ("ExcludedVolumeSphere", "EV", "ExcludedVolume_restraint"), 
+            ("GaussianEMRestraint", "EM3D", "EM_restraint"),
+            ("DistanceRestraint_Score", "DR","Distance_restraint"),
+            ("ResidueBindingRestraint_score", "BR","ResidueBinding_restraint"),
+            ("OccamsPositionalRestraint_Score","OccPos", "OccamsPos_restraint"),
+            ("pEMapRestraint_Score","pEMap", "pEMAP_restraint"),
+            ("DOPE_Restraint_score","DOPE", "DOPE_restraint"),
+            ("MembraneExclusionRestraint", "MEX", "MembraneExclusion_restraint"),
+            ("MembraneSurfaceLocation", "MLS", "MembraneSurfaceLocation_restraint"),
+            ("CrossLinkingMassSpectrometryRestraint_Data_Score", "XL", "XLs_restraint"),
+            ("CrossLinkingMassSpectrometryRestraint_Data_Score", "atomic_XL", "atomic_XLs_restraint"),
+            ("OccamsRestraint_Score", "Occ", "Occams_restraint")
         ]
 
 def generate_n_distinct_colors(n):
@@ -40,11 +40,13 @@ def generate_n_distinct_colors(n):
     colors = plt.cm.hsv(np.linspace(0, 1, n))    
     return colors
 
+
 color_palette =  generate_n_distinct_colors(100)
 
 def worker(task):
     method, args = task
     return method(*args)
+
 
 class ParallelProcessor:
     def __init__(self):
@@ -56,6 +58,7 @@ class ParallelProcessor:
             results = pool.map(worker, tasks)
         return results
 
+    
 class AnalysisTrajectories(object):
     def __init__(
         self,
@@ -114,7 +117,7 @@ class AnalysisTrajectories(object):
         self.number_models_out = number_models_out
         self.rerun = False
         
-         # Create analysis dir if missing
+        # Create analysis dir if missing
         if not os.path.isdir(self.analysis_dir):
             os.mkdir(self.analysis_dir)
         
@@ -446,7 +449,7 @@ class AnalysisTrajectories(object):
         
         # Execute the tasks in parallel
         results = processor.parallel_process(tasks)
-    
+        
     def read_stats_detailed(self, traj, stat_files):
         """
         Detailed reading of stats files that includes
@@ -2179,5 +2182,4 @@ class AnalysisTrajectories(object):
         else:
             return strs[0]
 
-    
-    
+
