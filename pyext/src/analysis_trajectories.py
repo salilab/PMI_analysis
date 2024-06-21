@@ -21,19 +21,20 @@ mpl.rcParams.update({"font.size": 10})
 
 restraints = [
             ("ConnectivityRestraint", "CR", "Connectivity_restraint"),
-            ("ExcludedVolumeSphere", "EV", "ExcludedVolume_restraint"), 
+            ("ExcludedVolumeSphere", "EV", "ExcludedVolume_restraint"),
             ("GaussianEMRestraint", "EM3D", "EM_restraint"),
-            ("DistanceRestraint_Score", "DR","Distance_restraint"),
-            ("ResidueBindingRestraint_score", "BR","ResidueBinding_restraint"),
-            ("OccamsPositionalRestraint_Score","OccPos", "OccamsPos_restraint"),
-            ("pEMapRestraint_Score","pEMap", "pEMAP_restraint"),
-            ("DOPE_Restraint_score","DOPE", "DOPE_restraint"),
+            ("DistanceRestraint_Score", "DR", "Distance_restraint"),
+            ("ResidueBindingRestraint_score", "BR", "ResidueBinding_restraint"),
+            ("OccamsPositionalRestraint_Score", "OccPos", "OccamsPos_restraint"),
+            ("pEMapRestraint_Score", "pEMap", "pEMAP_restraint"),
+            ("DOPE_Restraint_score", "DOPE", "DOPE_restraint"),
             ("MembraneExclusionRestraint", "MEX", "MembraneExclusion_restraint"),
             ("MembraneSurfaceLocation", "MLS", "MembraneSurfaceLocation_restraint"),
             ("CrossLinkingMassSpectrometryRestraint_Data_Score", "XL", "XLs_restraint"),
             ("CrossLinkingMassSpectrometryRestraint_Data_Score", "atomic_XL", "atomic_XLs_restraint"),
             ("OccamsRestraint_Score", "Occ", "Occams_restraint")
         ]
+
 
 def generate_n_distinct_colors(n):
     # Generate a palette of N distinct colors using matplotlib's HSV colormap
@@ -1236,8 +1237,6 @@ class AnalysisTrajectories(object):
 
     def do_extract_models(self, gsms_info, filename, gsms_dir):
 
-        #self.scores = self.manager.list()
-
         # Split the DF
         df_array = np.array_split(gsms_info, self.nproc)
 
@@ -1329,8 +1328,6 @@ class AnalysisTrajectories(object):
         @param clean_rmfs : if True, delete the RMF files created in
                each trajectory directory
         """
-
-        #self.scores = self.manager.list()
 
         # Split the DF into pieces based on trajectory
 
@@ -2181,5 +2178,3 @@ class AnalysisTrajectories(object):
             return max(intersect, key=len)
         else:
             return strs[0]
-
-

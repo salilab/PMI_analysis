@@ -5,43 +5,51 @@ import glob
 import sys
 import os
 
+# Change this to the location of your PMI_analysis folder
 sys.path.append('/home/ignacia/SOFTW/PMI_analysis/pyext/src/')
 from analysis_trajectories import *
 
-#################################
-########### MAIN ################
-#################################
+if __name__ == "__main__":
+    nproc = 1
+    top_dir =  sys.argv[1]
+    cluster = sys.argv[2]
+    if len(sys.argv) == 4:
+        state = sys.argv[3]
+    else:
+        state = 0
 
-nproc = 4
-top_dir =  sys.argv[1] 
-analys_dir = top_dir+'/analys/'
+    analysis_dir = os.path.join(top_dir,'analysis/')
 
-# How are the trajectories dir names
-dir_head = 'run_'
-out_dirs = glob.glob(top_dir+'/'+dir_head+'*/output/')
+    # How are the trajectories dir names
+    dir_head = 'run_'
+    out_dirs = glob.glob(os.path.join(top_dir,f"{dir_head}*/output/")
 
-################################
-# Extract frames
-################################
+    # Load module
+    AT = AnalysisTrajectories(out_dirs,
+                              dir_name=dir_head,
+                              analysis_dir = analys_dir,
+                              nproc=nproc)
 
-# Load module
-AT = AnalysisTrajectories(out_dirs,
-                          dir_name=dir_head,
-                          analysis_dir = analys_dir,
-                          nproc=nproc)
+    # Point to the selected_models file
+    HA = AT.get_models_to_extract(
+        os.path.join(top_dir, f'{analysis_dir}/selected_models_A_cluster{cluster}_random.csv'))
+    HB = AT.get_models_to_extract(
+        os.path.join(top_dir, f'{analysis_sir}/selected_models_B_cluster{cluster}_random.csv'))
 
-# Create dir
-gsms_A_dir = analys_dir+'GSMs_cl0/sample_A'
-gsms_B_dir = analys_dir+'GSMs_cl0/sample_B'
+    rmf_file_out_A = 'A_models_clust'+str(c)+'.rmf3'
+    rmf_file_out_B = 'B_models_clust'+str(c)+'.rmf3'
 
-AT.create_gsms_dir(gsms_A_dir)
-AT.create_gsms_dir(gsms_B_dir)
+    AT.do_extract_models_single_rmf(HA, 
+                                    rmf_file_out_A,
+                                    top_dir,       
+                                    analysis_dir,     
+                                    scores_prefix = f"A_models_cluster{cluster}_{state}")  
+                         
+    AT.do_extract_models_single_rmf(HB,
+                                    rmf_file_out_B,
+                                    top_dir, analysis_dir,
+                                    scores_prefix = f"B_models_cluster{cluster}_{state}")
 
-HA = AT.get_models_to_extract('analys/selected_models_A_cluster0_random.csv')
-HB = AT.get_models_to_extract('analys/selected_models_B_cluster0_random.csv')
-AT.do_extract_models(HA, 'h1', gsms_A_dir)
-AT.do_extract_models(HB, 'h2', gsms_B_dir)
 
-exit()
 
 
