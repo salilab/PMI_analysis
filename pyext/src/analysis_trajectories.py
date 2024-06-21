@@ -14,31 +14,30 @@ import IMP
 import IMP.rmf
 import RMF
 import matplotlib as mpl
-import matplotlib.pylab as plt  
-import matplotlib.gridspec as gridspec  
+import matplotlib.pylab as plt
+import matplotlib.gridspec as gridspec
 
 mpl.rcParams.update({"font.size": 10})
 
 restraints = [
-            ("ConnectivityRestraint", "CR","Connectivity_restraint"),
-            ("ExcludedVolumeSphere", "EV","ExcludedVolume_restraint"),
-            ("GaussianEMRestraint", "EM3D","EM_restraint"),
-            ("DistanceRestraint_Score", "DR","Distance_restraint"),
-            ("ResidueBindingRestraint_score", "BR","ResidueBinding_restraint"),
-            ("OccamsPositionalRestraint_Score","OccPos","OccamsPos_restraint"),
-            ("pEMapRestraint_Score","pEMap","pEMAP_restraint"),
-            ("DOPE_Restraint_score","DOPE","DOPE_restraint"),
-            ("MembraneExclusionRestraint","MEX","MembraneExclusion_restraint"),
-            ("MembraneSurfaceLocation","MLS","MembraneSurfaceLocation_restraint"),
-            ("CrossLinkingMassSpectrometryRestraint_Data_Score","XL","XLs_restraint"),
-            ("CrossLinkingMassSpectrometryRestraint_Data_Score","atomic_XL","atomic_XLs_restraint"),
+            ("ConnectivityRestraint", "CR","Connectivity_restraint"), 
+            ("ExcludedVolumeSphere", "EV","ExcludedVolume_restraint"), 
+            ("GaussianEMRestraint", "EM3D","EM_restraint"), 
+            ("DistanceRestraint_Score", "DR","Distance_restraint"), 
+            ("ResidueBindingRestraint_score", "BR","ResidueBinding_restraint"), 
+            ("OccamsPositionalRestraint_Score","OccPos","OccamsPos_restraint"), 
+            ("pEMapRestraint_Score","pEMap","pEMAP_restraint"), 
+            ("DOPE_Restraint_score","DOPE","DOPE_restraint"), 
+            ("MembraneExclusionRestraint","MEX","MembraneExclusion_restraint"), 
+            ("MembraneSurfaceLocation","MLS","MembraneSurfaceLocation_restraint"), 
+            ("CrossLinkingMassSpectrometryRestraint_Data_Score","XL","XLs_restraint"), 
+            ("CrossLinkingMassSpectrometryRestraint_Data_Score","atomic_XL","atomic_XLs_restraint"), 
             ("OccamsRestraint_Score","Occ","Occams_restraint")
         ]
 
 def generate_n_distinct_colors(n):
     # Generate a palette of N distinct colors using matplotlib's HSV colormap
-    colors = plt.cm.hsv(np.linspace(0, 1, n))
-    
+    colors = plt.cm.hsv(np.linspace(0, 1, n))    
     return colors
 
 color_palette =  generate_n_distinct_colors(100)
@@ -159,7 +158,6 @@ class AnalysisTrajectories(object):
         self.info_handles = []
         self.all_score_fields = []
 
-        
         # Separate trajectories into two halves
         self.dir_halfA = np.sort(self.out_dirs)[::2]
         self.dir_halfB = np.sort(self.out_dirs)[1::2]
@@ -446,7 +444,7 @@ class AnalysisTrajectories(object):
         
         tasks = [(self.read_traj_info, (out_dirs,)) for out_dirs in out_dirs_dict.values()]
         
-         # Execute the tasks in parallel
+        # Execute the tasks in parallel
         results = processor.parallel_process(tasks)
     
     def read_stats_detailed(self, traj, stat_files):
