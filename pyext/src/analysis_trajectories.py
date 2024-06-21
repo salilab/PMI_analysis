@@ -1,11 +1,3 @@
-#!/usr/bin/env python
-
-"""
-Tools to analyze PMI MC runs
-"""
-
-from __future__ import division
-
 import os
 import math
 import glob
@@ -15,7 +7,7 @@ import itertools
 import subprocess
 import pandas as pd
 import numpy as np
-import multiprocessing as mp
+import multiprocessing
 from equilibration import detectEquilibration
 import hdbscan
 
@@ -24,117 +16,32 @@ import IMP.rmf
 import RMF
 
 import matplotlib as mpl
-
-mpl.use("Agg")
-import matplotlib.pylab as pl  # noqa: E402
-import matplotlib.gridspec as gridspec  # noqa: E402
+import matplotlib.pylab as plt  
+import matplotlib.gridspec as gridspec  
 
 mpl.rcParams.update({"font.size": 10})
 
+def generate_n_distinct_colors(n):
+    # Generate a palette of N distinct colors using matplotlib's HSV colormap
+    colors = plt.cm.hsv(np.linspace(0, 1, n))
+    
+    return colors
 
-color_palette = [
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-    "#ccb974",
-    "#64b5cd",
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-    "#ccb974",
-    "#64b5cd",
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-    "#ccb974",
-    "#64b5cd",
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-    "#ccb974",
-    "#64b5cd",
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-    "#ccb974",
-    "#64b5cd",
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-    "#ccb974",
-    "#64b5cd",
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-    "#ccb974",
-    "#64b5cd",
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-    "#ccb974",
-    "#64b5cd",
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-    "#ccb974",
-    "#64b5cd",
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-    "#ccb974",
-    "#64b5cd",
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-    "#ccb974",
-    "#64b5cd",
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-    "#ccb974",
-    "#64b5cd",
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-    "#ccb974",
-    "#64b5cd",
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-    "#ccb974",
-    "#64b5cd",
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-    "#ccb974",
-    "#64b5cd",
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-    "#ccb974",
-    "#64b5cd",
-    "#4c72b0",
-    "#55a868",
-    "#c44e52",
-    "#8172b2",
-]
+color_palette =  generate_n_distinct_colors(100)
 
+def worker(task):
+    method, args = task
+    return method(*args)
+
+class ParallelProcessor:
+    def __init__(self):
+        self.manager = multiprocessing.Manager()
+
+    def parallel_process(self, tasks):
+        # Use a Pool for multiprocessing
+        with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+            results = pool.map(worker, tasks)
+        return results
 
 class AnalysisTrajectories(object):
     def __init__(
@@ -192,9 +99,14 @@ class AnalysisTrajectories(object):
         self.nskip = nskip
         self.burn_in_frac = burn_in_fraction
         self.number_models_out = number_models_out
-
+        self.rerun = False
+        
+         # Create analysis dir if missing
+        if not os.path.isdir(self.analysis_dir):
+            os.mkdir(self.analysis_dir)
+        
         # check if plot_fmt is supported
-        supported_fmts = list(pl.gcf().canvas.get_supported_filetypes().keys())
+        supported_fmts = list(plt.gcf().canvas.get_supported_filetypes().keys())
         if plot_fmt not in supported_fmts:
             raise KeyError(
                 "plot_fmt not found in supported matplotlib " "file types:",
@@ -202,9 +114,9 @@ class AnalysisTrajectories(object):
             )
         self.plot_fmt = plot_fmt
 
-        self.restraint_names = {}
-        self.all_score_fields = []
-        self.rerun = False
+        
+        
+        
 
         # report if equilibration detection has been requested
         if not self.detect_equilibration:
@@ -217,25 +129,6 @@ class AnalysisTrajectories(object):
                 "of each independent run as the burn-in phase and "
                 "discarding them" % self.burn_in_frac
             )
-
-        # Create analysis dir if missing
-        if not os.path.isdir(self.analysis_dir):
-            os.mkdir(self.analysis_dir)
-
-        # For multiprocessing
-        self.manager = mp.Manager()
-        self.S_all = self.manager.dict()
-        self.S_info_all = self.manager.dict()
-        self.S_dist_all = self.manager.dict()
-        self.XLs_nuis = self.manager.dict()
-
-        # Global sampling parameters
-        self.Sampling = self.manager.dict()
-        s_vals = ["Number_of_replicas", "N_equilibrated", "N_total"]
-
-        for v in s_vals:
-            self.Sampling[v] = []
-        self.Validation = self.manager.dict()
 
         # Define with restraints to analyze
         self.Connectivity_restraint = False
@@ -269,6 +162,7 @@ class AnalysisTrajectories(object):
         self.restraint_names["Total_Score"] = "Total_Score"
         self.distance_handles = []
         self.info_handles = []
+        self.all_score_fields = []
 
         # By default, add restraints of same type
         self.sum_Connectivity_restraint = True
@@ -546,12 +440,9 @@ class AnalysisTrajectories(object):
         return stat2_dict
 
     def read_stat_files(self):
-        """Multiprocessor reading of stat files"""
 
-        self.Sampling["Number_of_runs"] = len(self.out_dirs)
-
-        # Split directories
         ND = int(np.ceil(len(self.out_dirs) / float(self.nproc)))
+
         out_dirs_dict = {}
         for k in range(self.nproc - 1):
             out_dirs_dict[k] = list(self.out_dirs[(k * ND): (k * ND + ND)])
@@ -559,20 +450,24 @@ class AnalysisTrajectories(object):
             self.out_dirs[((self.nproc - 1) * ND): (len(self.out_dirs))]
         )
 
-        # Setup a list of processes that we want to run
-        processes = [
-            mp.Process(target=self.read_traj_info, args=((out_dirs_dict[x],)))
-            for x in range(self.nproc)
-        ]
+        processor = ParallelProcessor()
+        manager = processor.manager
 
-        # Run processes
-        for p in processes:
-            p.start()
+        self.S_all = manager.dict()
+        self.S_info_all = manager.dict()
+        self.S_dist_all = manager.dict()
+        self.XLs_nuis = manager.dict()
+        self.Sampling = manager.dict()
+        s_vals = ["Number_of_replicas", "N_equilibrated", "N_total"]
 
-        # Exit the completed processes
-        for p in processes:
-            p.join()
-
+        for v in s_vals:
+            self.Sampling[v] = []
+        
+        tasks = [(self.read_traj_info, (out_dirs,)) for out_dirs in out_dirs_dict.values()]
+        
+         # Execute the tasks in parallel
+        results = processor.parallel_process(tasks)
+    
     def read_stats_detailed(self, traj, stat_files):
         """
         Detailed reading of stats files that includes
@@ -584,6 +479,7 @@ class AnalysisTrajectories(object):
         S_dist = []
         P_info = []
 
+        
         for sf in stat_files:
             # Read header
             stat2_dict = self.get_keys(sf)
@@ -707,7 +603,9 @@ class AnalysisTrajectories(object):
             return DF, None, DF_info
         else:
             return DF, None, None
-
+        
+        return pd.DataFrame(), None, None
+    
     def add_restraint_type(self, DF, key_id):
         temp_fields = [v for v in DF.columns.values if key_id in v]
         DF_t = DF[temp_fields]
@@ -900,12 +798,15 @@ class AnalysisTrajectories(object):
             if self.atomic_XLs_restraint:
                 self.S_dist_all[out] = S_dist[ts_max:]
 
+        return 0
+    
+
     def get_field_id(self, dict, val):
         """
         For single field, get number of fields in stat file
         """
         return [k for k in dict.keys() if dict[k] == val]
-
+    
     def plot_scores_restraints(self, selected_scores, ts_eq, burn_in,
                                file_out):
         """
@@ -915,7 +816,7 @@ class AnalysisTrajectories(object):
         ts_max = np.max(ts_eq)
         n_res = len(selected_scores.columns.values) - 1
 
-        fig, ax = pl.subplots(figsize=(2.0 * n_res, 4.0), nrows=2, ncols=n_res)
+        fig, ax = plt.subplots(figsize=(2.0 * n_res, 4.0), nrows=2, ncols=n_res)
         axes = ax.flatten()
         for i, c in enumerate(selected_scores.columns.values[1:]):
             axes[i].plot(
@@ -951,9 +852,9 @@ class AnalysisTrajectories(object):
             if i == 0:
                 axes[i + n_res].set_ylabel("Density", fontsize=12)
 
-        pl.tight_layout(pad=0.5, w_pad=0.1, h_pad=2.0)
+        plt.tight_layout(pad=0.5, w_pad=0.1, h_pad=2.0)
         fig.savefig(os.path.join(self.analysis_dir, file_out))
-        pl.close()
+        plt.close()
 
     def write_models_info(self):
         """
@@ -1181,7 +1082,7 @@ class AnalysisTrajectories(object):
                 )
 
                 # Plot
-                fig, ax = pl.subplots(figsize=(10.0, 4.0), nrows=1, ncols=2)
+                fig, ax = plt.subplots(figsize=(10.0, 4.0), nrows=1, ncols=2)
                 axes = ax.flatten()
 
                 axes[0].bar(
@@ -1210,7 +1111,7 @@ class AnalysisTrajectories(object):
                 axes[1].set_xticklabels(runs_B, rotation=45)
                 axes[1].set_ylim([0, n_max])
 
-                pl.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.5)
+                plt.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.5)
                 fig.savefig(
                     os.path.join(
                         self.analysis_dir,
@@ -1218,7 +1119,7 @@ class AnalysisTrajectories(object):
                         + "." + self.plot_fmt,
                     )
                 )
-                pl.close()
+                plt.close()
 
     def write_hdbscan_clustering(self, S_comb):
 
@@ -1316,11 +1217,11 @@ class AnalysisTrajectories(object):
         cluster_colors = [palette[col] for col in S_comb_sel["cluster"]]
 
         n_sel = len(selected_scores)
-        fig = pl.figure(figsize=(2 * n_sel, 2 * n_sel))
+        fig = plt.figure(figsize=(2 * n_sel, 2 * n_sel))
         gs = gridspec.GridSpec(n_sel, n_sel)
         i = 0
         for s1, s2 in itertools.product(selected_scores, repeat=2):
-            ax = pl.subplot(gs[i])
+            ax = plt.subplot(gs[i])
             if s1 == s2:
                 ax.hist(S_comb_sel[s1], 20, histtype="step",
                         color="b", alpha=0.5)
@@ -1347,14 +1248,14 @@ class AnalysisTrajectories(object):
                 "%s" % (selected_scores[k]), fontsize=12)
             k += 1
 
-        pl.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
+        plt.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
         fig.savefig(os.path.join(self.analysis_dir,
                                  "plot_clustering_scores.png"))
-        pl.close()
+        plt.close()
 
     def do_extract_models(self, gsms_info, filename, gsms_dir):
 
-        self.scores = self.manager.list()
+        #self.scores = self.manager.list()
 
         # Split the DF
         df_array = np.array_split(gsms_info, self.nproc)
@@ -1448,7 +1349,7 @@ class AnalysisTrajectories(object):
                each trajectory directory
         """
 
-        self.scores = self.manager.list()
+        #self.scores = self.manager.list()
 
         # Split the DF into pieces based on trajectory
 
@@ -1466,7 +1367,7 @@ class AnalysisTrajectories(object):
 
         # Setup a list of processes that we want to run
         processes = [
-            mp.Process(
+            multiprocessing.Process(
                 target=self.extract_models_to_single_rmf,
                 args=(split_dfs[x], filenames[x], traj_dir,
                       scorefiles[x], sel_state),
@@ -1588,14 +1489,14 @@ class AnalysisTrajectories(object):
         scores_A = HA["Total_Score"]
         scores_B = HB["Total_Score"]
 
-        fig = pl.figure(figsize=(8, 4))
+        fig = plt.figure(figsize=(8, 4))
         gs = gridspec.GridSpec(1, 2, width_ratios=[0.5, 0.5],
                                height_ratios=[1.0])
 
         min_score = np.min([scores_A.min(), scores_B.min()])
         max_score = np.max([scores_A.max(), scores_B.max()])
         # Plot distributions
-        ax = pl.subplot(gs[0])
+        ax = plt.subplot(gs[0])
         ax.hist(
             scores_A,
             n_bins,
@@ -1652,7 +1553,7 @@ class AnalysisTrajectories(object):
                 n = RH1[s + 1, 0]
                 continue
 
-        ax = pl.subplot(gs[1])
+        ax = plt.subplot(gs[1])
         ax.errorbar(RH1[:, 0], RH1[:, 1], yerr=RH1[:, 2],
                     c="orangered", fmt="o")
         ax.errorbar(RH2[:, 0], RH2[:, 1], yerr=RH2[:, 2], c="blue", fmt="o")
@@ -1665,7 +1566,7 @@ class AnalysisTrajectories(object):
         ax.set_ylabel("Minimum score (a.u.)")
         ax.set_title("Convergence of scores")
 
-        pl.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.5)
+        plt.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.5)
         fig.savefig(
             os.path.join(
                 self.analysis_dir,
@@ -1673,7 +1574,7 @@ class AnalysisTrajectories(object):
                 + self.plot_fmt,
             )
         )
-        pl.close()
+        plt.close()
 
         return n
 
@@ -1981,7 +1882,7 @@ class AnalysisTrajectories(object):
         self.Sampling["N_total"] = np.sum(self.Sampling["N_total"])
         self.Sampling["N_equilibrated"] = np.sum(
             self.Sampling["N_equilibrated"])
-        # self.Sampling['Replica_exchange_temperature_range'] = '1.0-3.0'
+        self.Sampling['Replica_exchange_temperature_range'] = '1.0-3.0'
 
         DS = pd.DataFrame()
         for k, v in self.Sampling.items():
@@ -2299,3 +2200,6 @@ class AnalysisTrajectories(object):
             return max(intersect, key=len)
         else:
             return strs[0]
+
+    
+    
