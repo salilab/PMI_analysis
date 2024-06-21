@@ -97,7 +97,7 @@ Files ```all_info_*.csv``` contain the information about all models after equili
 
 ```python
 AT.read_models_info()
-AT.hdbscan_clustering(['EV_sum', 'XLs_sum'])
+AT.hdbscan_clustering(['CR_sum', 'EV_sum', 'XLs_sum'])
 ```
 
 After clustering a series of files are written with the information of frames in each cluster.

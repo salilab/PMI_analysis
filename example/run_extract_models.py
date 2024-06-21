@@ -19,25 +19,26 @@ if __name__ == "__main__":
         state = 0
 
     analysis_dir = os.path.join(top_dir,'analysis/')
+    print(analysis_dir)
 
     # How are the trajectories dir names
     dir_head = 'run_'
-    out_dirs = glob.glob(os.path.join(top_dir,f"{dir_head}*/output/")
+    out_dirs = glob.glob(os.path.join(top_dir,f"{dir_head}*/output/"))
 
     # Load module
     AT = AnalysisTrajectories(out_dirs,
                               dir_name=dir_head,
-                              analysis_dir = analys_dir,
+                              analysis_dir = analysis_dir,
                               nproc=nproc)
 
     # Point to the selected_models file
     HA = AT.get_models_to_extract(
-        os.path.join(top_dir, f'{analysis_dir}/selected_models_A_cluster{cluster}_random.csv'))
+        f'{analysis_dir}/selected_models_A_cluster{cluster}_detailed.csv')
     HB = AT.get_models_to_extract(
-        os.path.join(top_dir, f'{analysis_sir}/selected_models_B_cluster{cluster}_random.csv'))
+        f'{analysis_dir}/selected_models_B_cluster{cluster}_detailed.csv')
 
-    rmf_file_out_A = 'A_models_clust'+str(c)+'.rmf3'
-    rmf_file_out_B = 'B_models_clust'+str(c)+'.rmf3'
+    rmf_file_out_A = f'A_models_cluster{cluster}_{state}.rmf3'
+    rmf_file_out_B = f'B_models_cluster{cluster}_{state}.rmf3'
 
     AT.do_extract_models_single_rmf(HA, 
                                     rmf_file_out_A,
@@ -48,7 +49,8 @@ if __name__ == "__main__":
                          
     AT.do_extract_models_single_rmf(HB,
                                     rmf_file_out_B,
-                                    top_dir, analysis_dir,
+                                    top_dir,
+                                    analysis_dir,
                                     scores_prefix = f"B_models_cluster{cluster}_{state}",
                                     sel_state = state)
 

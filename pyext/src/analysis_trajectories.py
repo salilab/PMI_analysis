@@ -795,9 +795,7 @@ class AnalysisTrajectories(object):
                 self.S_dist_all[out] = S_dist[ts_max:]
             if self.atomic_XLs_restraint:
                 self.S_dist_all[out] = S_dist[ts_max:]
-
-        return 0
-    
+                
     def get_field_id(self, dict, val):
         """
         For single field, get number of fields in stat file
