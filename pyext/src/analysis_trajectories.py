@@ -1384,7 +1384,7 @@ class AnalysisTrajectories(object):
 
         # concatenate RMF files
         print("Concatenating", len(filenames), "RMF files to", output_rmf)
-        subprocess.check_call(["rmf_cat"] + filenames + [output_rmf])
+        subprocess.check_call(["rmf_cat"] + filenames + [output_rmf] + ["--force"])
 
         # concatenate score files
         with open(output_score_file, "wb") as outf:
@@ -1417,13 +1417,19 @@ class AnalysisTrajectories(object):
         h0 = IMP.rmf.create_hierarchies(f, m)[0]
         states = IMP.atom.get_by_type(h0, IMP.atom.STATE_TYPE)
         fh_out = RMF.create_rmf_file(output_rmf)
-        for i, s in enumerate(states):
-            if str(i) == sel_state:
-                print("-------", str(i), sel_state)
-                p = IMP.Particle(m, "System")
-                hier_temp = IMP.atom.Hierarchy.setup_particle(p)
-                hier_temp.add_child(s)
-                IMP.rmf.add_hierarchy(fh_out, hier_temp)
+        if len(states) > 0 :
+            for i, s in enumerate(states):
+                if i == sel_state:
+                    p = IMP.Particle(m, "System")
+                    hier_temp = IMP.atom.Hierarchy.setup_particle(p)
+                    hier_temp.add_child(s)
+                    IMP.rmf.add_hierarchy(fh_out, hier_temp)
+        else:
+            p = IMP.Particle(m, "System")
+            hier_temp = IMP.atom.Hierarchy.setup_particle(p)
+            hier_temp.add_child(h0)
+            IMP.rmf.add_hierarchy(fh_out, hier_temp)
+
         del f
 
         # Get a list of all the replica rmf3 files
@@ -1435,18 +1441,13 @@ class AnalysisTrajectories(object):
             rep_inf = inf[inf["rmf3_file"] == rep]
             rmf_file = os.path.join(top_dir, row1.traj, rep)
             f = RMF.open_rmf_file_read_only(rmf_file)
+            # Get number of frames
+            frame_count = f.get_number_of_frames()
             IMP.rmf.link_hierarchies(f, [h0])
             for (row_id, row) in rep_inf.iterrows():
-                # t = row.traj
-                # fr = int(row.MC_frame)
                 fr_rmf = int(row.rmf_frame_index)
-
-                # Sometimes individual frames don't print out for a number
-                # of reasons. Just skip over these
-                try:
+                if fr_rmf < frame_count:
                     IMP.rmf.load_frame(f, RMF.FrameID(fr_rmf))
-                except:  # noqa: E722
-                    continue
                 IMP.rmf.save_frame(fh_out, str(i))
 
                 if i % 1000 == 0:
