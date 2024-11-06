@@ -20,32 +20,24 @@ import matplotlib.gridspec as gridspec
 mpl.rcParams.update({"font.size": 10})
 
 restraints = [
-            ("ConnectivityRestraint",
-             "CR", "Connectivity_restraint"),
-            ("ExcludedVolumeSphere",
-             "EV", "ExcludedVolume_restraint"),
-            ("GaussianEMRestraint",
-             "EM3D", "EM_restraint"),
-            ("DistanceRestraint_Score",
-             "DR", "Distance_restraint"),
-            ("ResidueBindingRestraint_score",
-             "BR", "ResidueBinding_restraint"),
-            ("OccamsPositionalRestraint_Score",
-             "OccPos", "OccamsPos_restraint"),
-            ("pEMapRestraint_Score",
-             "pEMap", "pEMAP_restraint"),
-            ("DOPE_Restraint_score",
-             "DOPE", "DOPE_restraint"),
-            ("MembraneExclusionRestraint",
-             "MEX", "MembraneExclusion_restraint"),
-            ("MembraneSurfaceLocation",
-             "MLS", "MembraneSurfaceLocation_restraint"),
-            ("CrossLinkingMassSpectrometryRestraint_Data_Score",
-             "XL", "XLs_restraint"),
-            ("CrossLinkingMassSpectrometryRestraint_Data_Score",
-             "atomic_XL", "atomic_XLs_restraint"),
-            ("OccamsRestraint_Score", "Occ", "Occams_restraint")
-        ]
+    ("ConnectivityRestraint", "CR", "Connectivity_restraint"),
+    ("ExcludedVolumeSphere", "EV", "ExcludedVolume_restraint"),
+    ("GaussianEMRestraint", "EM3D", "EM_restraint"),
+    ("DistanceRestraint_Score", "DR", "Distance_restraint"),
+    ("ResidueBindingRestraint_score", "BR", "ResidueBinding_restraint"),
+    ("OccamsPositionalRestraint_Score", "OccPos", "OccamsPos_restraint"),
+    ("pEMapRestraint_Score", "pEMap", "pEMAP_restraint"),
+    ("DOPE_Restraint_score", "DOPE", "DOPE_restraint"),
+    ("MembraneExclusionRestraint", "MEX", "MembraneExclusion_restraint"),
+    ("MembraneSurfaceLocation", "MLS", "MembraneSurfaceLocation_restraint"),
+    ("CrossLinkingMassSpectrometryRestraint_Data_Score", "XL", "XLs_restraint"),
+    (
+        "CrossLinkingMassSpectrometryRestraint_Data_Score",
+        "atomic_XL",
+        "atomic_XLs_restraint",
+    ),
+    ("OccamsRestraint_Score", "Occ", "Occams_restraint"),
+]
 
 
 def generate_n_distinct_colors(n):
@@ -54,7 +46,7 @@ def generate_n_distinct_colors(n):
     return colors
 
 
-color_palette = generate_n_distinct_colors(100)
+color_palette = generate_n_distinct_colors(40)
 
 
 def worker(task):
@@ -68,12 +60,11 @@ class ParallelProcessor:
 
     def parallel_process(self, tasks):
         # Use a Pool for multiprocessing
-        with multiprocessing.Pool(
-                processes=multiprocessing.cpu_count()) as pool:
+        with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
             results = pool.map(worker, tasks)
         return results
 
-    
+
 class AnalysisTrajectories(object):
     def __init__(
         self,
@@ -131,17 +122,16 @@ class AnalysisTrajectories(object):
         self.burn_in_frac = burn_in_fraction
         self.number_models_out = number_models_out
         self.rerun = False
-        
+
         # Create analysis dir if missing
         if not os.path.isdir(self.analysis_dir):
             os.mkdir(self.analysis_dir)
-            
+
         # check if plot_fmt is supported
-        supported_fmts = list(
-            plt.gcf().canvas.get_supported_filetypes().keys())
+        supported_fmts = list(plt.gcf().canvas.get_supported_filetypes().keys())
         if plot_fmt not in supported_fmts:
             raise KeyError(
-                "plot_fmt not found in supported matplotlib " "file types:",
+                "plot_fmt not found in supported matplotlib file types:",
                 supported_fmts,
             )
         self.plot_fmt = plot_fmt
@@ -155,21 +145,22 @@ class AnalysisTrajectories(object):
             print(
                 "Considering %1.2f fraction of frames from the beginning "
                 "of each independent run as the burn-in phase and "
-                "discarding them" % self.burn_in_frac
+                "discarding them"
+                % self.burn_in_frac
             )
 
         # Initialize all restraints to False
         # By default, add restraints of same type
-        for (handle, name, flag) in restraints:
+        for handle, name, flag in restraints:
             setattr(self, flag, False)
-            setattr(self, f'sum_{flag}', True)
+            setattr(self, f"sum_{flag}", True)
         self.score_only_restraint = False
         self.sum_score_only_restraint = {}
         self.Multiple_psi_values = False
+        self.Multiple_XLs_restraints = False
 
         # Other handles
-        self.restraint_handles = [
-            "MonteCarlo_Nframe", "rmf_frame_index", "Total_Score"]
+        self.restraint_handles = ["MonteCarlo_Nframe", "rmf_frame_index", "Total_Score"]
         self.restraint_names = {"MonteCarlo_Nframe": "MC_frame"}
         self.restraint_names["rmf_frame_index"] = "rmf_frame_index"
         self.restraint_names["Total_Score"] = "Total_Score"
@@ -186,7 +177,7 @@ class AnalysisTrajectories(object):
         self.restraint_names[handle] = name
         if flag:
             setattr(self, flag, False)
-            
+
     def set_analyze_XLs_restraint(
         self,
         get_nuisances=True,
@@ -194,21 +185,18 @@ class AnalysisTrajectories(object):
         ambiguous_XLs_restraint=False,
         XLs_cutoffs={"DSSO": 30.0},
     ):
-
         self.restraint_handles.append(
             "CrossLinkingMassSpectrometryRestraint_Data_Score"
         )
         self.restraint_handles.append(
             "CrossLinkingMassSpectrometryRestraint_PriorPsi_Score"
         )
-        self.restraint_names[
-            "CrossLinkingMassSpectrometryRestraint_Data_Score"] = "XLs"
-        self.restraint_names[
-            "CrossLinkingMassSpectrometryRestraint_PriorPsi_Score"
-        ] = "XLs_psi"
+        self.restraint_names["CrossLinkingMassSpectrometryRestraint_Data_Score"] = "XLs"
+        self.restraint_names["CrossLinkingMassSpectrometryRestraint_PriorPsi_Score"] = (
+            "XLs_psi"
+        )
 
-        self.distance_handles.append(
-            "CrossLinkingMassSpectrometryRestraint_Distance_")
+        self.distance_handles.append("CrossLinkingMassSpectrometryRestraint_Distance_")
         self.info_handles.append("CrossLinkingMassSpectrometryRestraint_Psi_")
 
         # self.XLs_restraint = True
@@ -265,8 +253,7 @@ class AnalysisTrajectories(object):
         self.restraint_handles.append("OccamsRestraint_sigma_Score")
         self.restraint_names["OccamsRestraint_Score"] = "Struct_Equiv"
         self.restraint_names["OccamsRestraint_psi_Score"] = "Struct_Equiv_psi"
-        self.restraint_names["OccamsRestraint_sigma_Score"] \
-            = "Struct_Equiv_sigma"
+        self.restraint_names["OccamsRestraint_sigma_Score"] = "Struct_Equiv_sigma"
 
         # Other relevant info
         self.info_handles.append("OccamsRestraint_satisfied")
@@ -303,8 +290,7 @@ class AnalysisTrajectories(object):
         self.restraint_names["MembraneSurfaceLocation"] = "MSL"
         self.MembraneSurfaceLocation_restraint = True
 
-    def set_analyze_score_only_restraint(self, handle, short_name,
-                                         do_sum=True):
+    def set_analyze_score_only_restraint(self, handle, short_name, do_sum=True):
         self.restraint_handles.append(handle)
         self.restraint_names[handle] = short_name
         self.score_only_restraint = True
@@ -337,8 +323,7 @@ class AnalysisTrajectories(object):
                     "rmf_frame_index",
                     "Total_Score",
                 ]:
-                    score_names.append(
-                        self.restraint_names[restraint] + "_sum")
+                    score_names.append(self.restraint_names[restraint] + "_sum")
                 else:
                     score_names.append(self.restraint_names[restraint])
                 score_fields += RES.values()
@@ -421,12 +406,10 @@ class AnalysisTrajectories(object):
                 stat2_dict = d
                 # get the list of keys sorted by value
                 kkeys = [
-                    k[0] for k in sorted(stat2_dict.items(),
-                                         key=operator.itemgetter(1))
+                    k[0] for k in sorted(stat2_dict.items(), key=operator.itemgetter(1))
                 ]
                 klist = [
-                    k[1] for k in sorted(stat2_dict.items(),
-                                         key=operator.itemgetter(1))
+                    k[1] for k in sorted(stat2_dict.items(), key=operator.itemgetter(1))
                 ]
                 invstat2_dict = {}
                 for k in kkeys:
@@ -438,14 +421,13 @@ class AnalysisTrajectories(object):
         return stat2_dict
 
     def read_stat_files(self):
-
         ND = int(np.ceil(len(self.out_dirs) / float(self.nproc)))
 
         out_dirs_dict = {}
         for k in range(self.nproc - 1):
-            out_dirs_dict[k] = list(self.out_dirs[(k * ND): (k * ND + ND)])
+            out_dirs_dict[k] = list(self.out_dirs[(k * ND) : (k * ND + ND)])
         out_dirs_dict[self.nproc - 1] = list(
-            self.out_dirs[((self.nproc - 1) * ND): (len(self.out_dirs))]
+            self.out_dirs[((self.nproc - 1) * ND) : (len(self.out_dirs))]
         )
 
         processor = ParallelProcessor()
@@ -460,13 +442,14 @@ class AnalysisTrajectories(object):
 
         for v in s_vals:
             self.Sampling[v] = []
-            
-        tasks = [(self.read_traj_info, (out_dirs,))
-                 for out_dirs in out_dirs_dict.values()]
-        
+
+        tasks = [
+            (self.read_traj_info, (out_dirs,)) for out_dirs in out_dirs_dict.values()
+        ]
+
         # Execute the tasks in parallel
         processor.parallel_process(tasks)
-        
+
     def read_stats_detailed(self, traj, stat_files):
         """
         Detailed reading of stats files that includes
@@ -507,16 +490,13 @@ class AnalysisTrajectories(object):
 
                 if line_number > 1:
                     frmf = [d[field] for field in query_rmf_file][0]
-                    s0 = [float(d[field]) for field in score_fields] \
-                        + [traj, frmf]
+                    s0 = [float(d[field]) for field in score_fields] + [traj, frmf]
                     S_scores.append(s0)
                     if len(dist_fields) > 0:
-                        d0 = [s0[0]] + [float(d[field])
-                                        for field in dist_fields]
+                        d0 = [s0[0]] + [float(d[field]) for field in dist_fields]
                         S_dist.append(d0)
                     if len(info_fields) > 0:
-                        p0 = [s0[0]] + [float(d[field])
-                                        for field in info_fields]
+                        p0 = [s0[0]] + [float(d[field]) for field in info_fields]
                         P_info.append(p0)
 
         # Sort based on frame
@@ -532,8 +512,7 @@ class AnalysisTrajectories(object):
             DF = DF.assign(XLs_sum=XLs_sum.values)
 
         if self.atomic_XLs_restraint and self.sum_atomic_XLs_restraint:
-            atomic_XLs_sum = pd.Series(
-                self.add_restraint_type(DF, "atomic_XLs_"))
+            atomic_XLs_sum = pd.Series(self.add_restraint_type(DF, "atomic_XLs_"))
             DF = DF.assign(atomic_XLs_sum=atomic_XLs_sum.values)
 
         all_EV = [res for res in score_names if "EV_" in res]
@@ -554,17 +533,15 @@ class AnalysisTrajectories(object):
         if self.Distance_restraint and self.sum_Distance_restraint:
             DR_sum = pd.Series(self.add_restraint_type(DF, "DR_"))
             DF = DF.assign(DR_sum=DR_sum.values)
-            
-        if (self.MembraneExclusion_restraint
-                and self.sum_MembraneExclusion_restraint):
+
+        if self.MembraneExclusion_restraint and self.sum_MembraneExclusion_restraint:
             MEX_sum = pd.Series(self.add_restraint_type(DF, "MEX_"))
             DF = DF.assign(MEX_sum=MEX_sum.values)
-            
-        if (self.MembraneExclusion_restraint
-                and self.sum_MembraneExclusion_restraint):
+
+        if self.MembraneExclusion_restraint and self.sum_MembraneExclusion_restraint:
             MSL_sum = pd.Series(self.add_restraint_type(DF, "MSL_"))
             DF = DF.assign(MSL_sum=MSL_sum.values)
-            
+
         # if some score only type custom restraints defined by the user
         # need to be summed. Because of the do_sum flag available while
         # calling the set_analyze_score_only_restraint() method on the
@@ -576,8 +553,7 @@ class AnalysisTrajectories(object):
                 prefix = key + "_"
                 all_restraint = [res for res in score_names if prefix in res]
                 if len(all_restraint) > 1 and do_sum:
-                    this_restraint_sum = pd.Series(
-                        self.add_restraint_type(DF, prefix))
+                    this_restraint_sum = pd.Series(self.add_restraint_type(DF, prefix))
                     sum_dict = {prefix + "sum": this_restraint_sum.values}
                     DF = DF.assign(**sum_dict)
 
@@ -602,7 +578,7 @@ class AnalysisTrajectories(object):
             return DF, None, DF_info
         else:
             return DF, None, None
-        
+
     def add_restraint_type(self, DF, key_id):
         temp_fields = [v for v in DF.columns.values if key_id in v]
         DF_t = DF[temp_fields]
@@ -627,8 +603,7 @@ class AnalysisTrajectories(object):
             self.Sampling["Number_of_replicas"] += [len(stat_files)]
 
             # Read all stat files of trajectory
-            S_tot_scores, S_dist, S_info = self.read_stats_detailed(traj,
-                                                                    stat_files)
+            S_tot_scores, S_dist, S_info = self.read_stats_detailed(traj, stat_files)
 
             n_frames = len(S_tot_scores)
             burn_in = int(self.burn_in_frac * n_frames)
@@ -647,24 +622,19 @@ class AnalysisTrajectories(object):
             ]
 
             # If specified by user, can look at individual contributions
-            if (self.Connectivity_restraint
-                    and not self.sum_Connectivity_restraint):
+            if self.Connectivity_restraint and not self.sum_Connectivity_restraint:
                 sel_entries += [
                     v
                     for v in S_tot_scores.columns.values
                     if "CR_" in v and "sum" not in v
                 ]
-            if (
-                self.ExcludedVolume_restraint
-                and not self.sum_ExcludedVolume_restraint
-            ):
+            if self.ExcludedVolume_restraint and not self.sum_ExcludedVolume_restraint:
                 sel_entries += [
                     v
                     for v in S_tot_scores.columns.values
                     if "EV_" in v and "sum" not in v
                 ]
-            if (self.ResidueBinding_restraint
-                and not self.sum_ResdiueBinding_restraint):
+            if self.ResidueBinding_restraint and not self.sum_ResdiueBinding_restraint:
                 sel_entries += [
                     v
                     for v in S_tot_scores.columns.values
@@ -703,8 +673,7 @@ class AnalysisTrajectories(object):
 
             # Also add nuisances parameter
             sel_entries += [
-                v for v in S_tot_scores.columns.values
-                if "Psi" in v and "sum" not in v
+                v for v in S_tot_scores.columns.values if "Psi" in v and "sum" not in v
             ]
 
             # Detect equilibration time if requested
@@ -713,8 +682,7 @@ class AnalysisTrajectories(object):
                 for r in sel_entries:
                     try:
                         [t, g, N] = detectEquilibration(
-                            np.array(S_tot_scores[r].loc[burn_in:]),
-                            nskip=self.nskip
+                            np.array(S_tot_scores[r].loc[burn_in:]), nskip=self.nskip
                         )
                         ts_eq.append(t)
                     except (ValueError, TypeError):
@@ -727,22 +695,17 @@ class AnalysisTrajectories(object):
             self.Sampling["N_equilibrated"] += [n_frames - ts_max]
 
             # Plot the scores and restraint satisfaction
-            file_out = "plot_scores_%s.%s" % (traj_number, self.plot_fmt)
+            file_out = f"plot_scores_{traj_number}.{self.plot_fmt}"
             self.plot_scores_restraints(
-                S_tot_scores[["MC_frame"] + sel_entries],
-                ts_eq, burn_in, file_out
+                S_tot_scores[["MC_frame"] + sel_entries], ts_eq, burn_in, file_out
             )
 
             if self.pEMAP_restraint:
-                file_out_pemap = "plot_pEMAP_%s.%s" % (traj_number,
-                                                       self.plot_fmt)
+                file_out_pemap = f"plot_pEMAP_{traj_number}.{self.plot_fmt}"
                 self.plot_pEMAP_satisfaction(S_info, file_out_pemap)
 
             if self.Occams_restraint:
-                file_out_occams = "plot_Occams_satisfaction_%s.%s" % (
-                    traj_number,
-                    self.plot_fmt,
-                )
+                file_out_occams = f"plot_Occams_{traj_number}.{self.plot_fmt}"
                 self.plot_Occams_satisfaction(S_info, file_out_occams)
 
             # Check how many XLs are satisfied
@@ -795,15 +758,14 @@ class AnalysisTrajectories(object):
                 self.S_dist_all[out] = S_dist[ts_max:]
             if self.atomic_XLs_restraint:
                 self.S_dist_all[out] = S_dist[ts_max:]
-                
+
     def get_field_id(self, dict, val):
         """
         For single field, get number of fields in stat file
         """
         return [k for k in dict.keys() if dict[k] == val]
-    
-    def plot_scores_restraints(self, selected_scores, ts_eq, burn_in,
-                               file_out):
+
+    def plot_scores_restraints(self, selected_scores, ts_eq, burn_in, file_out):
         """
         For each trajectory plot all restraint scores
         """
@@ -811,8 +773,7 @@ class AnalysisTrajectories(object):
         ts_max = np.max(ts_eq)
         n_res = len(selected_scores.columns.values) - 1
 
-        fig, ax = plt.subplots(
-            figsize=(2.0 * n_res, 4.0), nrows=2, ncols=n_res)
+        fig, ax = plt.subplots(figsize=(2.0 * n_res, 4.0), nrows=2, ncols=n_res)
         axes = ax.flatten()
         for i, c in enumerate(selected_scores.columns.values[1:]):
             axes[i].plot(
@@ -829,7 +790,7 @@ class AnalysisTrajectories(object):
 
         for i, c in enumerate(selected_scores.columns.values[1:]):
             axes[i + n_res].hist(
-                selected_scores[c].loc[ts_eq[i]:: 10],
+                selected_scores[c].loc[ts_eq[i] :: 10],
                 n_bins,
                 histtype="step",
                 fill=False,
@@ -861,8 +822,7 @@ class AnalysisTrajectories(object):
             kk = k.split(self.dir_name)[-1].split("/")[0]
             T.to_csv(
                 os.path.join(
-                    os.path.join(self.analysis_dir,
-                                 "scores_info_" + str(kk) + ".csv")
+                    os.path.join(self.analysis_dir, f"scores_info_{kk}.csv")
                 )
             )
 
@@ -871,8 +831,7 @@ class AnalysisTrajectories(object):
             kk = k.split(self.dir_name)[-1].split("/")[0]
             T.to_csv(
                 os.path.join(
-                    os.path.join(self.analysis_dir,
-                                 "XLs_dist_info_" + str(kk) + ".csv")
+                    os.path.join(self.analysis_dir, f"XLs_dist_info_{kk}.csv")
                 )
             )
 
@@ -881,8 +840,7 @@ class AnalysisTrajectories(object):
             kk = k.split(self.dir_name)[-1].split("/")[0]
             T.to_csv(
                 os.path.join(
-                    os.path.join(self.analysis_dir,
-                                 "other_info_" + str(kk) + ".csv")
+                    os.path.join(self.analysis_dir, f"other_info_{kk}.csv")
                 )
             )
 
@@ -896,23 +854,24 @@ class AnalysisTrajectories(object):
             self.XLs_cutoffs = XLs_cutoffs
 
         # Score files
-        info_files = glob.glob(os.path.join(self.analysis_dir,
-                                            "scores_info_*.csv"))
+        self.S_all = {}
+        info_files = glob.glob(os.path.join(self.analysis_dir, "scores_info_*.csv"))
         for f in info_files:
-            k = f.split("all_info_")[-1].split(".csv")[0]
+            k = f.split("scores_info_")[-1].split(".csv")[0]
             df = pd.read_csv(f)
-            self.S_all[k] = df
+            print('k', k)
+            self.S_all[int(k)] = df
 
         # XLs files
-        xls_files = glob.glob(os.path.join(self.analysis_dir,
-                                           "XLs_dist_info_*.csv"))
+        self.S_dist_all = {}
+        xls_files = glob.glob(os.path.join(self.analysis_dir, "XLs_dist_info_*.csv"))
         if len(xls_files) > 0:
             self.XLs_restraint = True
             self.ambiguous_XLs_restraint = False
             for f in xls_files:
-                k = f.split("XLs_info_")[-1].split(".csv")[0]
+                k = f.split("XLs_dist_info_")[-1].split(".csv")[0]
                 df = pd.read_csv(f)
-                self.S_dist_all[k] = df
+                self.S_dist_all[int(k)] = df
 
             # Check for ambiguity
             k0 = list(self.S_dist_all.keys())[0]
@@ -928,15 +887,15 @@ class AnalysisTrajectories(object):
         DO HDBSCAN clustering for selected restraint and/or nuisance parameters
         """
 
-        all_dfs = [self.S_all[dd] for dd in np.sort(self.S_all.keys())]
+        print(np.sort(list(self.S_all.keys())))
+        all_dfs = [self.S_all[dd] for dd in np.sort(list(self.S_all.keys()))]
         S_comb = pd.concat(all_dfs)
 
         # Print all available fields before checking if field exists.
         print("All available fields: ", S_comb.columns.values)
         S_comb_sel = S_comb[selected_scores].iloc[::skip]
         S_comb_all = S_comb.iloc[::skip]
-        print("Fields selected for HDBSCAN clustering: ",
-              S_comb_sel.columns.values)
+        print("Fields selected for HDBSCAN clustering: ", S_comb_sel.columns.values)
 
         hdbsc = hdbscan.HDBSCAN(
             min_cluster_size=min_cluster_size, min_samples=min_samples
@@ -952,12 +911,10 @@ class AnalysisTrajectories(object):
 
         # Add cluster labels also to XLs info if available
         if self.XLs_restraint is True:
-
             all_dist_dfs = [
-                self.S_dist_all[dd] for dd in np.sort(self.S_dist_all.keys())
+                self.S_dist_all[dd] for dd in np.sort(list(self.S_dist_all.keys()))
             ]
-            S_comb_dist_clustering = pd.concat(
-                all_dist_dfs, sort=False).iloc[::skip]
+            S_comb_dist_clustering = pd.concat(all_dist_dfs, sort=False).iloc[::skip]
 
             S_comb_dist_clustering = S_comb_dist_clustering.assign(
                 cluster=pd.Series(
@@ -965,8 +922,8 @@ class AnalysisTrajectories(object):
                 ).values
             )
             S_comb_dist_clustering.to_csv(
-                os.path.join(self.analysis_dir, "XLs_clustering_info.csv"),
-                index=False)
+                os.path.join(self.analysis_dir, "XLs_clustering_info.csv"), index=False
+            )
             self.S_comb_dist_clustering = S_comb_dist_clustering
 
         print(
@@ -994,21 +951,20 @@ class AnalysisTrajectories(object):
         """
 
         aggregation = {
-            v: "mean" for v in S_comb_all.columns.values
-            if v not in ["half", "cluster"]
+            v: "mean" for v in S_comb_all.columns.values if v not in ["half", "cluster"]
         }
-        aggregation.update(
-            {"cluster": lambda x: len(x), "half": lambda x: len(x[x == "A"])}
-        )
+        aggregation.update({
+            "cluster": lambda x: len(x), "half": lambda x: len(x[x == "A"])
+        })
 
         S_clusters = S_comb_all.groupby("cluster").agg(aggregation)
 
-        S_clusters.rename(columns={"cluster": "N_models", "half": "N_A"},
-                          inplace=True)
+        S_clusters.rename(columns={"cluster": "N_models", "half": "N_A"}, inplace=True)
         S_clusters["N_B"] = S_clusters["N_models"] - S_clusters["N_A"]
         S_clusters = S_clusters.sort_values("Total_Score")
 
         # Selection criteria: lowest total score with at least 20-80 split
+        self.Sampling = {}
         for i, row in S_clusters.iterrows():
             if 1.0 - (row["N_models"] - row["N_A"]) / row["N_models"] >= 0.2:
                 self.Sampling["N_selected"] = row["N_models"]
@@ -1020,9 +976,9 @@ class AnalysisTrajectories(object):
         columns = (
             ["Total_Score"]
             + [
-                x for x in S_clusters.columns.values
-                if x not in ["cluster", "Total_Score", "N_models",
-                             "N_A", "N_B"]
+                x
+                for x in S_clusters.columns.values
+                if x not in ["cluster", "Total_Score", "N_models", "N_A", "N_B"]
             ]
             + ["N_models", "N_A", "N_B"]
         )
@@ -1055,7 +1011,7 @@ class AnalysisTrajectories(object):
         if len(clusters) == 0:
             clusters = [-1]
 
-        for cl in clusters:
+        for n, cl in enumerate(clusters):
             counts_traj_A = pd.DataFrame(columns=["traj", "counts_A"])
             counts_traj_B = pd.DataFrame(columns=["traj", "counts_B"])
             counts_traj_A["traj"] = runs_A
@@ -1067,11 +1023,13 @@ class AnalysisTrajectories(object):
             HB = HH_cluster[(HH_cluster["half"] == "B")]
             if len(HA["half"].values) >= 0 and len(HB["half"].values) >= 0:
                 for traj in counts_traj_A["traj"].values:
-                    counts_traj_A.loc[counts_traj_A["traj"] == traj,
-                                      "counts_A"] = len(HA[HA["traj"] == traj])
+                    counts_traj_A.loc[counts_traj_A["traj"] == traj, "counts_A"] = len(
+                        HA[HA["traj"] == traj]
+                    )
                 for traj in counts_traj_B["traj"].values:
-                    counts_traj_B.loc[counts_traj_B["traj"] == traj,
-                                      "counts_B"] = len(HB[HB["traj"] == traj])
+                    counts_traj_B.loc[counts_traj_B["traj"] == traj, "counts_B"] = len(
+                        HB[HB["traj"] == traj]
+                    )
                 n_max = np.max(
                     list(counts_traj_A["counts_A"].values)
                     + list(counts_traj_B["counts_B"].values)
@@ -1111,24 +1069,20 @@ class AnalysisTrajectories(object):
                 fig.savefig(
                     os.path.join(
                         self.analysis_dir,
-                        "plot_run_models_cluster" + str(cl)
-                        + "." + self.plot_fmt,
+                        f"plot_run_models_cluster{cl}.{self.plot_fmt}",
                     )
                 )
                 plt.close()
 
     def write_hdbscan_clustering(self, S_comb):
-
         """
         Write the frames information for each cluster
         """
 
         # Remove files from previous runs
         try:
-            os.remove(os.path.join(self.analysis_dir,
-                                   "selected_models_A_cluster*"))
-            os.remove(os.path.join(self.analysis_dir,
-                                   "selected_models_B_cluster*"))
+            os.remove(os.path.join(self.analysis_dir, "selected_models_A_cluster*"))
+            os.remove(os.path.join(self.analysis_dir, "selected_models_B_cluster*"))
         except:  # noqa: E722
             pass
 
@@ -1140,10 +1094,11 @@ class AnalysisTrajectories(object):
             clusters = [-1]
 
         S_comb.loc[:, "frame_RMF3"] = S_comb.apply(
-            lambda row: "h1_" + row.traj + "_"
-            + str(int(row.MC_frame)) + ".rmf3"
-            if row.half == "A"
-            else "h2_" + row.traj + "_" + str(int(row.MC_frame)) + ".rmf3",
+            lambda row: (
+                "h1_" + row.traj + "_" + str(int(row.MC_frame)) + ".rmf3"
+                if row.half == "A"
+                else "h2_" + row.traj + "_" + str(int(row.MC_frame)) + ".rmf3"
+            ),
             axis=1,
         )
 
@@ -1163,15 +1118,13 @@ class AnalysisTrajectories(object):
                 HA.to_csv(
                     os.path.join(
                         self.analysis_dir,
-                        "selected_models_A_cluster" + str(cl)
-                        + "_detailed.csv",
+                        f"selected_models_A_cluster{cl}_detailed.csv",
                     )
                 )
                 HB.to_csv(
                     os.path.join(
                         self.analysis_dir,
-                        "selected_models_B_cluster" + str(cl)
-                        + "_detailed.csv",
+                        f"selected_models_B_cluster{cl}_detailed.csv",
                     )
                 )
 
@@ -1219,8 +1172,7 @@ class AnalysisTrajectories(object):
         for s1, s2 in itertools.product(selected_scores, repeat=2):
             ax = plt.subplot(gs[i])
             if s1 == s2:
-                ax.hist(S_comb_sel[s1], 20, histtype="step",
-                        color="b", alpha=0.5)
+                ax.hist(S_comb_sel[s1], 20, histtype="step", color="b", alpha=0.5)
             else:
                 ax.scatter(
                     S_comb_sel[s2],
@@ -1234,19 +1186,16 @@ class AnalysisTrajectories(object):
 
         # Add horizontal labels (top plots)
         for i in range(n_sel):
-            fig.get_axes()[i].set_title(
-                "%s" % (selected_scores[i]), fontsize=12)
+            fig.get_axes()[i].set_title("%s" % (selected_scores[i]), fontsize=12)
         # Add vertical labels
         fig.get_axes()[0].set_ylabel("%s" % (selected_scores[0]), fontsize=12)
         k = 1
         for i in range(n_sel, n_sel * n_sel, n_sel):
-            fig.get_axes()[i].set_ylabel(
-                "%s" % (selected_scores[k]), fontsize=12)
+            fig.get_axes()[i].set_ylabel("%s" % (selected_scores[k]), fontsize=12)
             k += 1
 
         plt.tight_layout(pad=1.2, w_pad=1.5, h_pad=2.5)
-        fig.savefig(os.path.join(self.analysis_dir,
-                                 "plot_clustering_scores.png"))
+        fig.savefig(os.path.join(self.analysis_dir, "plot_clustering_scores.png"))
         plt.close()
 
     def do_extract_models(self, gsms_info, filename, gsms_dir):
@@ -1257,8 +1206,7 @@ class AnalysisTrajectories(object):
         # Setup a list of processes that we want to run
         processes = [
             multiprocessing.Process(
-                target=self.extract_models,
-                args=(df_array[x], filename, gsms_dir)
+                target=self.extract_models, args=(df_array[x], filename, gsms_dir)
             )
             for x in range(self.nproc)
         ]
@@ -1272,12 +1220,10 @@ class AnalysisTrajectories(object):
             p.join()
 
         # Write scores to file
-        np.savetxt(os.path.join(gsms_dir, filename + ".txt"),
-                   np.array(self.scores))
+        np.savetxt(os.path.join(gsms_dir, filename + ".txt"), np.array(self.scores))
 
     def write_GSMs_info(self, gsms_info, filename):
-        gsms_info.to_csv(os.path.join(self.analysis_dir, filename),
-                         index=False)
+        gsms_info.to_csv(os.path.join(self.analysis_dir, filename), index=False)
 
     def get_models_to_extract(self, f):
         # Get models to extract from file
@@ -1303,12 +1249,11 @@ class AnalysisTrajectories(object):
             rmf_file = row.rmf3_file
             traj_in = os.path.join(ID, rmf_file)
             file_out = os.path.join(
-                gsms_dir, filename + "_" + str(ID) + "_" + str(fr) + ".rmf3"
+                gsms_dir, f"{filename}_{str(ID)}_{str(fr)}.rmf3"
             )
 
             os.system(
-                "rmf_slice -q " + traj_in + " " + file_out
-                + " --frame " + str(fr_rmf)
+                f"rmf_slice -q {traj_in} {file_out} --frame {str(fr_rmf)}"
             )
 
             # Collect scores
@@ -1343,6 +1288,9 @@ class AnalysisTrajectories(object):
                each trajectory directory
         """
 
+        processor = ParallelProcessor()
+        manager = processor.manager
+
         # Split the DF into pieces based on trajectory
 
         # Find the number of trajectories
@@ -1354,26 +1302,33 @@ class AnalysisTrajectories(object):
         for td in traj_dirs:
             split_dfs.append(gsms_info[gsms_info["traj"] == td])
             filenames.append(os.path.join(traj_dir, td, out_rmf_name))
-            scorefiles.append(os.path.join(traj_dir, td,
-                                           scores_prefix + ".txt"))
+            scorefiles.append(os.path.join(traj_dir, td, f"{scores_prefix}.txt"))
 
-        # Setup a list of processes that we want to run
-        processes = [
-            multiprocessing.Process(
-                target=self.extract_models_to_single_rmf,
-                args=(split_dfs[x], filenames[x], traj_dir,
-                      scorefiles[x], sel_state),
+        ZZ = list(
+            zip(
+                split_dfs,
+                filenames,
+                scorefiles,
+                [traj_dir] * len(split_dfs),
+                [sel_state] * len(split_dfs),
             )
-            for x in range(len(filenames))
+        )
+        # Setup tasks
+        tasks = [
+            (
+                self.extract_models_to_single_rmf,
+                (
+                    df,
+                    fls,
+                    scrs,
+                    traj_dir,
+                    sel_state,
+                ),
+            )
+            for df, fls, scrs, traj_dir, sel_state in ZZ
         ]
 
-        # Run processes
-        for p in processes:
-            p.start()
-
-        # Exit the completed processes
-        for p in processes:
-            p.join()
+        processor.parallel_process(tasks)
 
         output_rmf = os.path.join(analysis_dir, out_rmf_name)
         output_score_file = os.path.join(analysis_dir, scores_prefix + ".txt")
@@ -1400,7 +1355,7 @@ class AnalysisTrajectories(object):
                 os.remove(sf)
 
     def extract_models_to_single_rmf(
-        self, inf, output_rmf, top_dir, scores_file, sel_state=0
+        self, inf, output_rmf, scores_file, top_dir, sel_state=0
     ):
         # Given a dataframe from get_models_to_extract(), extract these
         # models and place into a single RMF file: output_rmf
@@ -1417,9 +1372,9 @@ class AnalysisTrajectories(object):
         h0 = IMP.rmf.create_hierarchies(f, m)[0]
         states = IMP.atom.get_by_type(h0, IMP.atom.STATE_TYPE)
         fh_out = RMF.create_rmf_file(output_rmf)
-        if len(states) > 0 :
+        if len(states) > 0:
             for i, s in enumerate(states):
-                if i == sel_state:
+                if i == int(sel_state):
                     p = IMP.Particle(m, "System")
                     hier_temp = IMP.atom.Hierarchy.setup_particle(p)
                     hier_temp.add_child(s)
@@ -1437,6 +1392,7 @@ class AnalysisTrajectories(object):
 
         # Cycle through models by individual replica so we only open
         # one RMF at a time
+
         for rep in replicas:
             rep_inf = inf[inf["rmf3_file"] == rep]
             rmf_file = os.path.join(top_dir, row1.traj, rep)
@@ -1444,15 +1400,14 @@ class AnalysisTrajectories(object):
             # Get number of frames
             frame_count = f.get_number_of_frames()
             IMP.rmf.link_hierarchies(f, [h0])
-            for (row_id, row) in rep_inf.iterrows():
+            for row_id, row in rep_inf.iterrows():
                 fr_rmf = int(row.rmf_frame_index)
                 if fr_rmf < frame_count:
                     IMP.rmf.load_frame(f, RMF.FrameID(fr_rmf))
-                IMP.rmf.save_frame(fh_out, str(i))
+                    IMP.rmf.save_frame(fh_out, str(i))
 
                 if i % 1000 == 0:
-                    print("Writing frame:", i, "of", len(inf.index),
-                          "for", output_rmf)
+                    print("Writing frame:", i, "of", len(inf.index), "for", output_rmf)
 
                 # Collect scores
                 scores.append(row.Total_Score)
@@ -1483,8 +1438,7 @@ class AnalysisTrajectories(object):
         scores_B = HB["Total_Score"]
 
         fig = plt.figure(figsize=(8, 4))
-        gs = gridspec.GridSpec(1, 2, width_ratios=[0.5, 0.5],
-                               height_ratios=[1.0])
+        gs = gridspec.GridSpec(1, 2, width_ratios=[0.5, 0.5], height_ratios=[1.0])
 
         min_score = np.min([scores_A.min(), scores_B.min()])
         max_score = np.max([scores_A.max(), scores_B.max()])
@@ -1499,8 +1453,7 @@ class AnalysisTrajectories(object):
             color="orangered",
         )
         ax.hist(
-            scores_B, n_bins, histtype="step", stacked=True,
-            fill=False, color="blue"
+            scores_B, n_bins, histtype="step", stacked=True, fill=False, color="blue"
         )
         ax.set_xlabel("Total scores (a.u.)")
         ax.set_ylabel("Density")
@@ -1547,8 +1500,7 @@ class AnalysisTrajectories(object):
                 continue
 
         ax = plt.subplot(gs[1])
-        ax.errorbar(RH1[:, 0], RH1[:, 1], yerr=RH1[:, 2],
-                    c="orangered", fmt="o")
+        ax.errorbar(RH1[:, 0], RH1[:, 1], yerr=RH1[:, 2], c="orangered", fmt="o")
         ax.errorbar(RH2[:, 0], RH2[:, 1], yerr=RH2[:, 2], c="blue", fmt="o")
         ax.axvline(n, color="grey")
         ax.axhline(max_score, color="grey", ls="dashed", lw=3)
@@ -1563,8 +1515,7 @@ class AnalysisTrajectories(object):
         fig.savefig(
             os.path.join(
                 self.analysis_dir,
-                "plot_scores_convergence_cluster" + str(cl) + "."
-                + self.plot_fmt,
+                f"plot_scores_convergence_cluster{str(cl)}.{self.plot_fmt}",
             )
         )
         plt.close()
@@ -1639,17 +1590,23 @@ class AnalysisTrajectories(object):
             #     ),
             #     ignore_index=True,
             # )
-            DF_stat_nuis = pd.concat([DF_stat_nuis, pd.DataFrame(pd.Series(
-                                [k] + sel_nuis_mean + sel_nuis_std,
-                                index=DF_stat_nuis.columns.values).to_dict(),
-                                index=[0])],
-                            ignore_index=True)
+            DF_stat_nuis = pd.concat(
+                [
+                    DF_stat_nuis,
+                    pd.DataFrame(
+                        pd.Series(
+                            [k] + sel_nuis_mean + sel_nuis_std,
+                            index=DF_stat_nuis.columns.values,
+                        ).to_dict(),
+                        index=[0],
+                    ),
+                ],
+                ignore_index=True,
+            )
 
-        DF_stat_nuis.to_csv(os.path.join(self.analysis_dir,
-                                         "Stat_all_nuisances.csv"))
+        DF_stat_nuis.to_csv(os.path.join(self.analysis_dir, "Stat_all_nuisances.csv"))
 
-    def analyze_trajectory_XLs(self, S_dist, S_info, atomic_XLs, traj_number,
-                               ts_max):
+    def analyze_trajectory_XLs(self, S_dist, S_info, atomic_XLs, traj_number, ts_max):
         sel_XLs_nuis = [
             v
             for v in S_info.columns.values
@@ -1692,18 +1649,15 @@ class AnalysisTrajectories(object):
 
         return S_info
 
-    def get_XLs_satisfaction(self, S_dist, atomic_XLs, type_XLs=None,
-                             type_psi=None):
+    def get_XLs_satisfaction(self, S_dist, atomic_XLs, type_XLs=None, type_psi=None):
         if type_XLs and not type_psi:
             dist_columns = [
-                x for x in S_dist.columns.values
-                if ("Distance_" in x and type_XLs in x)
+                x for x in S_dist.columns.values if ("Distance_" in x and type_XLs in x)
             ]
             cutoff = self.XLs_cutoffs[type_XLs]
         elif type_psi and not type_XLs:
             dist_columns = [
-                x for x in S_dist.columns.values
-                if ("Distance_" in x and type_psi in x)
+                x for x in S_dist.columns.values if ("Distance_" in x and type_psi in x)
             ]
             cutoff = list(self.XLs_cutoffs.values())[0]
         elif type_XLs and type_psi:
@@ -1714,12 +1668,10 @@ class AnalysisTrajectories(object):
             ]
             cutoff = self.XLs_cutoffs[type_XLs]
         elif atomic_XLs:
-            dist_columns = [x for x in S_dist.columns.values
-                            if ("BestDist" in x)]
+            dist_columns = [x for x in S_dist.columns.values if ("BestDist" in x)]
             cutoff = list(self.XLs_cutoffs.values())[0]
         else:
-            dist_columns = [x for x in S_dist.columns.values
-                            if "Distance_" in x]
+            dist_columns = [x for x in S_dist.columns.values if "Distance_" in x]
             cutoff = list(self.XLs_cutoffs.values())[0]
 
         # Only distance columns
@@ -1727,8 +1679,7 @@ class AnalysisTrajectories(object):
 
         # Check for ambiguity
         if self.ambiguous_XLs_restraint is True:
-            ambiguous_XLs_dict = self.check_XLs_ambiguity(
-                S_dist.columns.values)
+            ambiguous_XLs_dict = self.check_XLs_ambiguity(S_dist.columns.values)
             min_XLs = pd.DataFrame()
             if self.Multiple_XLs_restraints:
                 for k, v in ambiguous_XLs_dict[type_XLs].items():
@@ -1753,10 +1704,8 @@ class AnalysisTrajectories(object):
         # Remove files from previous runs
         try:
             os.remove(os.path.join(self.analysis_dir, "plot_XLs_distances_*"))
-            os.remove(os.path.join(
-                self.analysis_dir, "XLs_satisfaction_cluster_*"))
-            os.remove(os.path.join(
-                self.analysis_dir, "XLs_distances_cluster_*"))
+            os.remove(os.path.join(self.analysis_dir, "XLs_satisfaction_cluster_*"))
+            os.remove(os.path.join(self.analysis_dir, "XLs_distances_cluster_*"))
         except:  # noqa: E722
             pass
 
@@ -1771,8 +1720,7 @@ class AnalysisTrajectories(object):
         except:  # noqa: E722
             self.ambiguous_XLs_restraint = ambiguous_XLs_restraint
 
-        unique_clusters = np.sort(
-            list(set(self.S_comb_dist_clustering["cluster"])))
+        unique_clusters = np.sort(list(set(self.S_comb_dist_clustering["cluster"])))
         print("Summarize XLs, unique_clusters", unique_clusters)
         if self.Multiple_XLs_restraints:
             for type_XLs in self.XLs_cutoffs.keys():
@@ -1805,12 +1753,10 @@ class AnalysisTrajectories(object):
                 for v in self.S_comb_dist_clustering.columns.values
                 if "Distance" in v and type_XLs in v
             ]
-            cutoff = [v for k, v in self.XLs_cutoffs.items()
-                      if type_XLs in k][0]
+            cutoff = [v for k, v in self.XLs_cutoffs.items() if type_XLs in k][0]
         else:
             dist_columns = [
-                v for v in self.S_comb_dist_clustering.columns.values
-                if "Distance" in v
+                v for v in self.S_comb_dist_clustering.columns.values if "Distance" in v
             ]
             cutoff = list(self.XLs_cutoffs.values())[0]
 
@@ -1835,31 +1781,26 @@ class AnalysisTrajectories(object):
             stats_XLs.to_csv(
                 os.path.join(
                     self.analysis_dir,
-                    "XLs_satisfaction_"
-                    + type_XLs
-                    + "_cluster_"
-                    + str(cluster)
-                    + ".csv",
+                    f"XLs_satisfaction_{type_XLs}_cluster_{cluster}.csv",
                 )
             )
             dXLs_cluster.to_csv(
                 os.path.join(
                     self.analysis_dir,
-                    "XLs_distances_" + type_XLs + "_cluster_"
-                    + str(cluster) + ".csv",
+                    f"XLs_distances_{type_XLs}_cluster_{cluster}.csv",
                 )
             )
         else:
             stats_XLs.to_csv(
                 os.path.join(
                     self.analysis_dir,
-                    "XLs_satisfaction_cluster_" + str(cluster) + ".csv",
+                    f"XLs_satisfaction_cluster_{cluster}.csv",
                 )
             )
             dXLs_cluster.to_csv(
                 os.path.join(
-                    self.analysis_dir, "XLs_distances_cluster_"
-                    + str(cluster) + ".csv"
+                    self.analysis_dir,
+                    f"XLs_distances_cluster_{cluster}.csv"
                 )
             )
 
@@ -1873,17 +1814,15 @@ class AnalysisTrajectories(object):
             set(self.Sampling["Number_of_replicas"])
         )[0]
         self.Sampling["N_total"] = np.sum(self.Sampling["N_total"])
-        self.Sampling["N_equilibrated"] = np.sum(
-            self.Sampling["N_equilibrated"])
-        self.Sampling['Replica_exchange_temperature_range'] = '1.0-3.0'
+        self.Sampling["N_equilibrated"] = np.sum(self.Sampling["N_equilibrated"])
+        self.Sampling["Replica_exchange_temperature_range"] = "1.0-3.0"
 
         DS = pd.DataFrame()
         for k, v in self.Sampling.items():
             DS[k] = [v]
 
         DS.to_csv(
-            os.path.join(self.analysis_dir,
-                         "summary_sampling_information.csv"),
+            os.path.join(self.analysis_dir, "summary_sampling_information.csv"),
             index=False,
         )
 
@@ -1911,8 +1850,7 @@ class AnalysisTrajectories(object):
         axes = ax.flatten()
         for i, c in enumerate(XLs_percent):
             label = c
-            axes[0].plot(S_info["MC_frame"][::20], S_info[c].loc[::20],
-                         label=label)
+            axes[0].plot(S_info["MC_frame"][::20], S_info[c].loc[::20], label=label)
         axes[0].set_title("XLs restraint satisfaction", fontsize=14)
         axes[0].set_xlabel("Step", fontsize=12)
         axes[0].set_ylabel("Percent Satisfied", fontsize=12)
@@ -1921,8 +1859,7 @@ class AnalysisTrajectories(object):
 
         for i, c in enumerate(XLs_nuis):
             label = c.split("CrossLinkingMassSpectrometryRestraint_")[-1]
-            axes[1].plot(S_info["MC_frame"][::20], S_info[c].loc[::20],
-                         label=label)
+            axes[1].plot(S_info["MC_frame"][::20], S_info[c].loc[::20], label=label)
         axes[1].set_title("Psi nuisance parameters", fontsize=14)
         axes[1].set_xlabel("Step", fontsize=12)
         axes[1].set_ylabel("Psi", fontsize=12)
@@ -1932,8 +1869,8 @@ class AnalysisTrajectories(object):
         for i, c in enumerate(XLs_nuis):
             label = c.split("CrossLinkingMassSpectrometryRestraint_")[-1]
             axes[2].hist(
-                S_info[c].loc[ts_max:], n_bins, histtype="step", fill=False,
-                label=label)
+                S_info[c].loc[ts_max:], n_bins, histtype="step", fill=False, label=label
+            )
 
         axes[2].set_title("Psi nuisance parameters", fontsize=14)
         axes[2].set_xlabel("Psi", fontsize=12)
@@ -1948,19 +1885,11 @@ class AnalysisTrajectories(object):
     def boxplot_XLs_distances(self, cluster=0, type_XLs=None, cutoff=30.0):
         if type_XLs:
             file_out = (
-                "plot_XLs_distance_distributions_cl"
-                + str(cluster)
-                + "_"
-                + str(type_XLs)
-                + "."
-                + self.plot_fmt
+                f"plot_XLs_boxplot_cluster{cluster}_{type_XLs}.{self.plot_fmt}"
             )
         else:
             file_out = (
-                "plot_XLs_distance_distributions_cl"
-                + str(cluster)
-                + "."
-                + self.plot_fmt
+                f"plot_XLs_boxplot_cluster{cluster}.{self.plot_fmt}"
             )
 
         if type_XLs:
@@ -2004,52 +1933,53 @@ class AnalysisTrajectories(object):
             ll = v.split("_|")[1]
             label = "|".join(ll.split("|")[2:6])
             if m > 0:
-                XLs_ids = pd.concat([XLs_ids, pd.DataFrame(
-                                pd.Series([int(i), m, label],
-                                    index=columns).to_dict(),
-                                index=[0])],
-                            ignore_index=True)
+                XLs_ids = pd.concat(
+                    [
+                        XLs_ids,
+                        pd.DataFrame(
+                            pd.Series([int(i), m, label], index=columns).to_dict(),
+                            index=[0],
+                        ),
+                    ],
+                    ignore_index=True,
+                )
                 min_all.append(m)
         XLs_ids = XLs_ids.sort_values(by=["mean"])
         labels_ordered = XLs_ids["id"].values
 
         # For plot layout
-        S_sorted = np.array(dXLs_unique)[
-            :, XLs_ids["entry"].values.astype("int")]
+        S_sorted = np.array(dXLs_unique)[:, XLs_ids["entry"].values.astype("int")]
         n_xls = len(labels_ordered)
         n_plots = int(math.ceil(n_xls / 50.0))
         n_frac = int(math.ceil(n_xls / float(n_plots)))
 
         # Generate plot
-        fig, ax = plt.subplots(
-            figsize=(12, 6.0 * n_plots), nrows=n_plots, ncols=1)
+        fig, ax = plt.subplots(figsize=(12, 6.0 * n_plots), nrows=n_plots, ncols=1)
         if n_plots == 1:
             ax = [ax]
         for i in range(n_plots):
             if i == n_plots - 1:
                 _ = ax[i].boxplot(
-                    S_sorted[:, (i * n_frac): -1], patch_artist=True,
-                    showfliers=False)
+                    S_sorted[:, (i * n_frac) : -1], patch_artist=True, showfliers=False
+                )
                 ax[i].set_xticklabels(
-                    labels_ordered[(i * n_frac): -1], rotation="vertical",
-                    fontsize=10)
+                    labels_ordered[(i * n_frac) : -1], rotation="vertical", fontsize=10
+                )
                 max_y = np.max(S_sorted[:, -1]) + 25
                 ax[i].set_ylim([0, (max_y - (max_y % 25))])
             else:
                 _ = ax[i].boxplot(
-                    S_sorted[:, (i * n_frac): ((i + 1) * n_frac)],
+                    S_sorted[:, (i * n_frac) : ((i + 1) * n_frac)],
                     patch_artist=True,
                     showfliers=False,
                 )
                 ax[i].set_xticklabels(
-                    labels_ordered[(i * n_frac): ((i + 1) * n_frac)],
+                    labels_ordered[(i * n_frac) : ((i + 1) * n_frac)],
                     rotation="vertical",
                     fontsize=10,
                 )
-                ax[i].set_ylim(
-                    [0, np.max(S_sorted[:, (i + 1) * n_frac]) + 20.0])
-            ax[i].axhline(y=cutoff, color="forestgreen", linestyle="-",
-                          linewidth=1.5)
+                ax[i].set_ylim([0, np.max(S_sorted[:, (i + 1) * n_frac]) + 20.0])
+            ax[i].axhline(y=cutoff, color="forestgreen", linestyle="-", linewidth=1.5)
             ax[i].set_xticks(range(1, n_frac + 1))
 
             ax[i].set_ylabel("XLs distances (A)")
@@ -2062,17 +1992,12 @@ class AnalysisTrajectories(object):
         # Plot histogram of best cluster distances
         if type_XLs:
             file_out_hist = (
-                "plot_XLs_distance_histogram_cl"
-                + str(cluster)
-                + "_"
-                + str(type_XLs)
-                + "."
-                + self.plot_fmt
+                f"plot_XLs_histogram_cluster{cluster}_{types_XLs}.{self.plot_fmt}"
             )
         else:
             file_out_hist = (
-                "plot_XLs_distance_histogram_cl" + str(cluster) + "."
-                + self.plot_fmt)
+                f"plot_XLs_histogram_cluster{cluster}.{self.plot_fmt}"
+            )
         self.plot_XLs_satisfaction_histogram(min_all, cutoff, file_out_hist)
 
     def plot_XLs_satisfaction_histogram(self, min_all, cutoff, file_out_hist):
@@ -2091,8 +2016,8 @@ class AnalysisTrajectories(object):
         fig, ax = plt.subplots(figsize=(4.0, 4.0), nrows=1, ncols=1)
 
         pemap_satif = [
-            v for v in S_info.columns.values
-            if "pEMapRestraint_satisfaction" in v][0]
+            v for v in S_info.columns.values if "pEMapRestraint_satisfaction" in v
+        ][0]
 
         ax.plot(
             S_info["MC_frame"].iloc[::10],
@@ -2117,8 +2042,8 @@ class AnalysisTrajectories(object):
         fig, ax = plt.subplots(figsize=(12.0, 4.0), nrows=1, ncols=3)
         # Occams satisfaction
         occams_satif = [
-            k for k in Occams_info.columns.values
-            if "OccamsRestraint_satisfied" in k]
+            k for k in Occams_info.columns.values if "OccamsRestraint_satisfied" in k
+        ]
 
         # Occams Psi nuisances
         occams_psi_nuis = [
@@ -2184,12 +2109,11 @@ class AnalysisTrajectories(object):
     def substrings(self, s):
         for i in range(len(s)):
             for j in range(i, len(s)):
-                yield s[i: j + 1]
+                yield s[i : j + 1]
 
     def get_str_match(self, strs):
         if len(strs) > 1:
-            intersect = (set(self.substrings(strs[0]))
-                         & set(self.substrings(strs[1])))
+            intersect = set(self.substrings(strs[0])) & set(self.substrings(strs[1]))
             return max(intersect, key=len)
         else:
             return strs[0]
