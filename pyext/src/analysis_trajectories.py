@@ -859,7 +859,6 @@ class AnalysisTrajectories(object):
         for f in info_files:
             k = f.split("scores_info_")[-1].split(".csv")[0]
             df = pd.read_csv(f)
-            print('k', k)
             self.S_all[int(k)] = df
 
         # XLs files
