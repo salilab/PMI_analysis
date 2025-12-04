@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import ast
 import math
 import glob
 import shutil
@@ -394,7 +395,13 @@ class AnalysisTrajectories(object):
         with open(stat_file, "r") as of:
             stat_file_lines = of.readlines()
         for line in stat_file_lines:
-            d = eval(line)
+            try:
+                d = ast.literal_eval(line)
+            except (ValueError, SyntaxError) as e:
+                raise ValueError(
+                    f"Failed to parse stat file {stat_file}: {e}. "
+                    "File may be corrupted or in wrong format."
+                )
             klist = list(d.keys())
             # check if it is a stat2 file
             if "STAT2HEADER" in klist:
@@ -479,12 +486,11 @@ class AnalysisTrajectories(object):
             for line in sf_lines:
                 line_number += 1
                 try:
-                    d = eval(line)
-                except:  # noqa: E722
+                    d = ast.literal_eval(line)
+                except (ValueError, SyntaxError) as e:
                     print(
-                        "# Warning: skipped line number "
-                        + str(line_number)
-                        + " not a valid line"
+                        f"# Warning: skipped line number {line_number} "
+                        f"not a valid line: {e}"
                     )
                     break
 
