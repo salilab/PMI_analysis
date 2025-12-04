@@ -148,8 +148,10 @@ class CMTable(object):
         Get rmf frames for an imp-sampcon cluster
         """
         frames = []
-        file_name = \
-            f"{self.clustering_dir}/cluster.{self.cluster}.sample_{half}.txt"
+        file_name = os.path.join(
+            self.clustering_dir,
+            f"cluster.{self.cluster}.sample_{half}.txt"
+        )
         for line in open(
             file_name, "r"
         ):
@@ -634,9 +636,10 @@ class CMTable(object):
         """
         Read contact map from text file
         """
+        from pathlib import Path
         self.cm_all = {}
         for f in files:
-            prot = f.split("ContMap_")[-1].split(".dat")[0]
+            prot = Path(f).stem.replace("ContMap_", "")
             cm = np.loadtxt(f)
             self.cm_all[prot] = cm
 

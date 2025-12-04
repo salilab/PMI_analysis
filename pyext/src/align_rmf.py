@@ -3,6 +3,7 @@ import IMP.pmi
 import IMP.pmi.macros
 import RMF
 import numpy as np
+from pathlib import Path
 
 
 def get_coordinates_alignment(hier, selection=None):
@@ -109,10 +110,7 @@ def align_rmf(rmf_in, rmf_out,
 
     # Save all RMSD values after alignment
     RMSD = np.array(RMSD)
-    if "/" in rmf_in:
-        name_in = rmf_in.split("/")[-1].split(".")[0]
-    else:
-        name_in = rmf_in.split(".")[0]
-    out_RMSD = f"{RMSD}_{name_in}.txt"
+    name_in = Path(rmf_in).stem
+    out_RMSD = f"{name_in}_RMSD.txt"
     np.savetxt(out_RMSD, RMSD)
     print("Mean RMSD:", np.mean(RMSD))

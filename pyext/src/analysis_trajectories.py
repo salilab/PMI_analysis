@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import math
 import glob
 import shutil
@@ -124,8 +125,7 @@ class AnalysisTrajectories(object):
         self.rerun = False
 
         # Create analysis dir if missing
-        if not os.path.isdir(self.analysis_dir):
-            os.mkdir(self.analysis_dir)
+        os.makedirs(self.analysis_dir, exist_ok=True)
 
         # check if plot_fmt is supported
         supported_fmts = list(plt.gcf().canvas.get_supported_filetypes().keys())
@@ -594,8 +594,12 @@ class AnalysisTrajectories(object):
 
         for out in out_dirs_sel:
             if self.dir_name in out:
-                traj = [x for x in out.split("/") if self.dir_name in x][0]
-                traj_number = int(traj.split(self.dir_name)[1])
+                traj = next((x for x in Path(out).parts if self.dir_name in x), None)
+                if traj:
+                    traj_number = int(traj.split(self.dir_name)[1])
+                else:
+                    traj = 0
+                    traj_number = 0
             else:
                 traj = 0
                 traj_number = 0
@@ -819,30 +823,18 @@ class AnalysisTrajectories(object):
         """
 
         for k, T in self.S_all.items():
-            kk = k.split(self.dir_name)[-1].split("/")[0]
-            T.to_csv(
-                os.path.join(
-                    os.path.join(self.analysis_dir, f"scores_info_{kk}.csv")
-                )
-            )
+            kk = Path(k).name.split(self.dir_name)[-1] if self.dir_name in k else Path(k).name
+            T.to_csv(os.path.join(self.analysis_dir, f"scores_info_{kk}.csv"))
 
         for k in self.S_dist_all.keys():
             T = self.S_dist_all[k]
-            kk = k.split(self.dir_name)[-1].split("/")[0]
-            T.to_csv(
-                os.path.join(
-                    os.path.join(self.analysis_dir, f"XLs_dist_info_{kk}.csv")
-                )
-            )
+            kk = Path(k).name.split(self.dir_name)[-1] if self.dir_name in k else Path(k).name
+            T.to_csv(os.path.join(self.analysis_dir, f"XLs_dist_info_{kk}.csv"))
 
         for k in self.S_info_all.keys():
             T = self.S_info_all[k]
-            kk = k.split(self.dir_name)[-1].split("/")[0]
-            T.to_csv(
-                os.path.join(
-                    os.path.join(self.analysis_dir, f"other_info_{kk}.csv")
-                )
-            )
+            kk = Path(k).name.split(self.dir_name)[-1] if self.dir_name in k else Path(k).name
+            T.to_csv(os.path.join(self.analysis_dir, f"other_info_{kk}.csv"))
 
     def read_models_info(self, XLs_cutoffs=None):
         """
@@ -857,7 +849,7 @@ class AnalysisTrajectories(object):
         self.S_all = {}
         info_files = glob.glob(os.path.join(self.analysis_dir, "scores_info_*.csv"))
         for f in info_files:
-            k = f.split("scores_info_")[-1].split(".csv")[0]
+            k = Path(f).stem.replace("scores_info_", "")
             df = pd.read_csv(f)
             self.S_all[int(k)] = df
 
@@ -868,7 +860,7 @@ class AnalysisTrajectories(object):
             self.XLs_restraint = True
             self.ambiguous_XLs_restraint = False
             for f in xls_files:
-                k = f.split("XLs_dist_info_")[-1].split(".csv")[0]
+                k = Path(f).stem.replace("XLs_dist_info_", "")
                 df = pd.read_csv(f)
                 self.S_dist_all[int(k)] = df
 
@@ -997,11 +989,15 @@ class AnalysisTrajectories(object):
         # Runs in each half
         runs_A = []
         for t in self.dir_halfA:
-            runs_A.append([x for x in t.split("/") if self.dir_name in x][0])
+            traj_name = next((x for x in Path(t).parts if self.dir_name in x), None)
+            if traj_name:
+                runs_A.append(traj_name)
         runs_A.sort(key=lambda x: float(x.split(self.dir_name)[-1]))
         runs_B = []
         for t in self.dir_halfB:
-            runs_B.append([x for x in t.split("/") if self.dir_name in x][0])
+            traj_name = next((x for x in Path(t).parts if self.dir_name in x), None)
+            if traj_name:
+                runs_B.append(traj_name)
         runs_B.sort(key=lambda x: float(x.split(self.dir_name)[-1]))
 
         # Count models per-run
@@ -1094,9 +1090,9 @@ class AnalysisTrajectories(object):
 
         S_comb.loc[:, "frame_RMF3"] = S_comb.apply(
             lambda row: (
-                "h1_" + row.traj + "_" + str(int(row.MC_frame)) + ".rmf3"
+                f"h1_{row.traj}_{int(row.MC_frame)}.rmf3"
                 if row.half == "A"
-                else "h2_" + row.traj + "_" + str(int(row.MC_frame)) + ".rmf3"
+                else f"h2_{row.traj}_{int(row.MC_frame)}.rmf3"
             ),
             axis=1,
         )
@@ -1219,7 +1215,7 @@ class AnalysisTrajectories(object):
             p.join()
 
         # Write scores to file
-        np.savetxt(os.path.join(gsms_dir, filename + ".txt"), np.array(self.scores))
+        np.savetxt(os.path.join(gsms_dir, f"{filename}.txt"), np.array(self.scores))
 
     def write_GSMs_info(self, gsms_info, filename):
         gsms_info.to_csv(os.path.join(self.analysis_dir, filename), index=False)
@@ -1330,7 +1326,7 @@ class AnalysisTrajectories(object):
         processor.parallel_process(tasks)
 
         output_rmf = os.path.join(analysis_dir, out_rmf_name)
-        output_score_file = os.path.join(analysis_dir, scores_prefix + ".txt")
+        output_score_file = os.path.join(analysis_dir, f"{scores_prefix}.txt")
 
         # check if rmf_cat is available
         if not shutil.which("rmf_cat"):
@@ -1423,8 +1419,8 @@ class AnalysisTrajectories(object):
         If already present, rename old one
         """
         if os.path.isdir(d):
-            os.rename(d, "%s.old_%d" % (d, random.randint(0, 100)))
-        os.mkdir(d)
+            os.rename(d, f"{d}.old_{random.randint(0, 100)}")
+        os.makedirs(d, exist_ok=True)
 
     def plot_scores_distributions(self, HA, HB, cl):
         """
@@ -1991,7 +1987,7 @@ class AnalysisTrajectories(object):
         # Plot histogram of best cluster distances
         if type_XLs:
             file_out_hist = (
-                f"plot_XLs_histogram_cluster{cluster}_{types_XLs}.{self.plot_fmt}"
+                f"plot_XLs_histogram_cluster{cluster}_{type_XLs}.{self.plot_fmt}"
             )
         else:
             file_out_hist = (

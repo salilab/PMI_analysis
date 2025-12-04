@@ -151,7 +151,7 @@ class AccuracyModels(object):
         """
         out_summary = open(
             os.path.join(
-                self.clustering_dir, "accuracy_" + self.out_header + "_clusters.dat"
+                self.clustering_dir, f"accuracy_{self.out_header}_clusters.dat"
             ),
             "w",
         )
@@ -161,7 +161,7 @@ class AccuracyModels(object):
             out = open(
                 os.path.join(
                     self.clustering_dir,
-                    "accuracy_" + self.out_header + "_cl" + str(k) + ".dat",
+                    f"accuracy_{self.out_header}_cl{k}.dat",
                 ),
                 "w",
             )

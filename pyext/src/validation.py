@@ -189,21 +189,24 @@ class ValidationModels(object):
         self.XLs_dist_clusters = {}
 
         for n in range(self.n_clusters):
-            dist_all = pd.DataFrame()
+            dist_list = []
             sel_cluster = self.DC[self.DC['cluster'] == n]
             trajs = sel_cluster['traj'].apply(
                 lambda x: x.split('run_')[1]).unique()
             for t in trajs:
                 frames = sel_cluster[
                     sel_cluster['traj'] == 'run_'+t]['MC_frame']
-                dist = pd.read_csv(self.analysis_dir + '/XLs_dist_info_'
-                                   + str(t) + '.csv')
+                dist = pd.read_csv(
+                    os.path.join(self.analysis_dir, f"XLs_dist_info_{t}.csv")
+                )
                 dist_cluster = dist[dist['MC_frame'].isin(frames)]
-                if not dist_all.empty:
-                    dist_all.append(dist_cluster)
-                else:
-                    dist_all = dist_cluster
+                if not dist_cluster.empty:
+                    dist_list.append(dist_cluster)
 
+            if dist_list:
+                dist_all = pd.concat(dist_list, ignore_index=True)
+            else:
+                dist_all = pd.DataFrame()
             self.XLs_dist_clusters[n] = dist_all
 
     def get_XLs_satisfaction(self):
@@ -274,19 +277,17 @@ class ValidationModels(object):
         if type_XLs:
             stats_XLs.to_csv(
                 os.path.join(self.clustering_dir,
-                             'XLs_satisfaction_' + type_XLs + '_cluster_'
-                             + str(cluster) + '.csv'))
+                             f'XLs_satisfaction_{type_XLs}_cluster_{cluster}.csv'))
             dXLs_cluster.to_csv(
                 os.path.join(self.clustering_dir,
-                             'XLs_distances_' + type_XLs + '_cluster_'
-                             + str(cluster) + '.csv'))
+                             f'XLs_distances_{type_XLs}_cluster_{cluster}.csv'))
         else:
             stats_XLs.to_csv(
                 os.path.join(self.clustering_dir,
-                             '/XLs_satisfaction_cluster_'+str(cluster)+'.csv'))
+                             f'XLs_satisfaction_cluster_{cluster}.csv'))
             dXLs_cluster.to_csv(
                 os.path.join(self.clustering_dir,
-                             '/XLs_distances_cluster_'+str(cluster)+'.csv'))
+                             f'XLs_distances_cluster_{cluster}.csv'))
 
         # Now compute the frame and ensemble satisfaction
         min_ensemble = dXLs_cluster.apply(lambda x: min(x), axis=0)
@@ -308,7 +309,7 @@ class ValidationModels(object):
         self.info_clusters = {}
 
         for n in range(self.n_clusters):
-            info_all = pd.DataFrame()
+            info_list = []
             sel_cluster = self.DC[self.DC['cluster'] == n]
             trajs = sel_cluster['traj'].apply(
                 lambda x: x.split('run_')[1]).unique()
@@ -318,11 +319,13 @@ class ValidationModels(object):
                 info = pd.read_csv(os.path.join(
                     self.analysis_dir, 'other_info_'+str(t)+'.csv'))
                 info_cluster = info[info['MC_frame'].isin(frames)]
-                if not info_all.empty:
-                    info_all.append(info_cluster)
-                else:
-                    info_all = info_cluster
+                if not info_cluster.empty:
+                    info_list.append(info_cluster)
 
+            if info_list:
+                info_all = pd.concat(info_list, ignore_index=True)
+            else:
+                info_all = pd.DataFrame()
             self.info_clusters[n] = info_all
 
     def get_pEMAP_satisfaction(self):
@@ -413,9 +416,11 @@ class ValidationModels(object):
             dist_min = np.apply_along_axis(np.min, axis=0, arr=AA)
             satif = [1 for i, j in zip(dist_min, dist_mic) if i >= j]
             percent_satif = float(len(satif))/len(dist_mic)
-            sPEMAP_all = sPEMAP_all.append(
-                {'cluster': cl, 'pEMAP_satisfaction': percent_satif},
-                ignore_index=True)
+            new_row = pd.DataFrame([{
+                'cluster': cl, 
+                'pEMAP_satisfaction': percent_satif
+            }])
+            sPEMAP_all = pd.concat([sPEMAP_all, new_row], ignore_index=True)
 
         print(n_clusters, sPEMAP_all)
         sPEMAP_all.to_csv(

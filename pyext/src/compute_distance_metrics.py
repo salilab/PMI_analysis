@@ -54,12 +54,10 @@ class get_distance_metrics(object):
 
         for k, v in self.rb_components.items():
             if len(v) > 1:
-                name = ''
-                for vv in v:
-                    name += str(vv[0])+' '+str(vv[1])+'/'
-                name = name[0:-1]
+                name_parts = [f"{vv[0]} {vv[1]}" for vv in v]
+                name = "/".join(name_parts)
             else:
-                name = str(v[0][0])+' '+str(v[0][1])
+                name = f"{v[0][0]} {v[0][1]}"
             print(k, name)
 
     def compute_DRMSD_all_versus_all(self):
@@ -134,8 +132,11 @@ class get_distance_metrics(object):
                 self.rb_components.keys(), 2):
             self.RMSD_pairs[(i, j)] = []
 
-        rmf3 = self.clustering_dir + '/cluster.' + \
-            str(self.cluster) + '/cluster_center_model.rmf3'
+        rmf3 = os.path.join(
+            self.clustering_dir,
+            f"cluster.{self.cluster}",
+            "cluster_center_model.rmf3"
+        )
 
         particles1, reference1 = self._get_RBs_particle_coordinates(rmf3)
         ntot = len(self.structures)
