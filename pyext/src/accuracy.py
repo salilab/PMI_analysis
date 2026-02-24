@@ -83,14 +83,16 @@ class AccuracyModels(object):
             print("Reading cluster:", cl)
             frames_A = []
             frames_B = []
-            for line in open(
+            with open(
                 os.path.join(self.clustering_dir, f"cluster.{cl}.sample_A.txt"), "r"
-            ):
-                frames_A.append(int(line.split("\n")[0]))
-            for line in open(
+            ) as f:
+                for line in f:
+                    frames_A.append(int(line.split("\n")[0]))
+            with open(
                 os.path.join(self.clustering_dir, f"cluster.{cl}.sample_B.txt"), "r"
-            ):
-                frames_B.append(int(line.split("\n")[0]) - self.nframes_A)
+            ) as f:
+                for line in f:
+                    frames_B.append(int(line.split("\n")[0]) - self.nframes_A)
             self.frames_cluster[cl] = {"A": frames_A, "B": frames_B}
             print(
                 "Number of frames per cluster (A,B):",
@@ -149,39 +151,31 @@ class AccuracyModels(object):
         Write accuracy values as well as
         the mean, min, and max
         """
-        out_summary = open(
-            os.path.join(
-                self.clustering_dir, f"accuracy_{self.out_header}_clusters.dat"
-            ),
-            "w",
+        out_summary_path = os.path.join(
+            self.clustering_dir, f"accuracy_{self.out_header}_clusters.dat"
         )
-
-        out_summary.write("cluster mean min max N \n")
-        for k, v in self.accuracy_values.items():
-            out = open(
-                os.path.join(
+        with open(out_summary_path, "w") as out_summary:
+            out_summary.write("cluster mean min max N \n")
+            for k, v in self.accuracy_values.items():
+                out_path = os.path.join(
                     self.clustering_dir,
                     f"accuracy_{self.out_header}_cl{k}.dat",
-                ),
-                "w",
-            )
-
-            if len(np.array(v)) > 0:
-                vv = np.array(v).astype(float)
-                out_summary.write(
-                    str(k)
-                    + "\t"
-                    + str(np.mean(vv))
-                    + "\t"
-                    + str(np.min(vv))
-                    + "\t"
-                    + str(np.max(vv))
-                    + "\t"
-                    + str(len(vv))
-                    + "\n"
                 )
-                out.close()
-        out_summary.close()
+                with open(out_path, "w") as out:
+                    if len(np.array(v)) > 0:
+                        vv = np.array(v).astype(float)
+                        out_summary.write(
+                            str(k)
+                            + "\t"
+                            + str(np.mean(vv))
+                            + "\t"
+                            + str(np.min(vv))
+                            + "\t"
+                            + str(np.max(vv))
+                            + "\t"
+                            + str(len(vv))
+                            + "\n"
+                        )
 
     def plot_accuracy_histograms(self):
         """

@@ -120,10 +120,9 @@ class get_distance_metrics(object):
 
         M.to_csv(file_matrix)
 
-        out = open(file_index, 'w')
-        for k, v in self.rb_components.items():
-            out.write(str(k)+'\t'+str(v).strip('[]')+'\n')
-        out.close()
+        with open(file_index, 'w') as out:
+            for k, v in self.rb_components.items():
+                out.write(str(k)+'\t'+str(v).strip('[]')+'\n')
 
     def compute_RMSD_all_versus_centroid(self):
 
@@ -226,10 +225,9 @@ class get_distance_metrics(object):
 
         M.to_csv(file_matrix)
 
-        out = open(file_index, 'w')
-        for k, v in self.rb_components.items():
-            out.write(str(k)+'\t'+str(v).strip('[]')+'\n')
-        out.close()
+        with open(file_index, 'w') as out:
+            for k, v in self.rb_components.items():
+                out.write(str(k)+'\t'+str(v).strip('[]')+'\n')
 
     def _read_all_coords_RBs(self, rmfs_cluster):
         '''

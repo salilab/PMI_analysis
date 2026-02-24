@@ -152,10 +152,9 @@ class CMTable(object):
             self.clustering_dir,
             f"cluster.{self.cluster}.sample_{half}.txt"
         )
-        for line in open(
-            file_name, "r"
-        ):
-            frames.append(int(line.strip()))
+        with open(file_name, "r") as f:
+            for line in f:
+                frames.append(int(line.strip()))
         return frames
 
     def get_all_indexes(self, p1):

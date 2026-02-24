@@ -29,32 +29,34 @@ class ReadClustering(object):
 
         rmfs_dic = {}
         print('------', self.clustering_dir)
-        for line in open(os.path.join(
-                self.clustering_dir, 'Identities_A.txt'), 'r'):
-            vals = line.split()
-            rmfs_dic[vals[1]] = vals[0]
-        for line in open(os.path.join(
-                self.clustering_dir, 'Identities_B.txt'), 'r'):
-            vals = line.split()
-            rmfs_dic[vals[1]] = vals[0]
+        with open(os.path.join(self.clustering_dir, 'Identities_A.txt'), 'r') as f:
+            for line in f:
+                vals = line.split()
+                rmfs_dic[vals[1]] = vals[0]
+        with open(os.path.join(self.clustering_dir, 'Identities_B.txt'), 'r') as f:
+            for line in f:
+                vals = line.split()
+                rmfs_dic[vals[1]] = vals[0]
 
         # Read rmfs in cluster
         rmfs = []
-        for mod in open(os.path.join(
+        with open(os.path.join(
                 self.clustering_dir,
-                'cluster.'+str(cluster)+'.sample_A.txt'), 'r'):
-            vals = mod.split()[0]
-            try:
-                rmfs.append(rmfs_dic[vals])
-            except:  # noqa: E722
-                print('Model missing: ', vals)
-        for mod in open(os.path.join(
+                'cluster.'+str(cluster)+'.sample_A.txt'), 'r') as f:
+            for mod in f:
+                vals = mod.split()[0]
+                if vals in rmfs_dic:
+                    rmfs.append(rmfs_dic[vals])
+                else:
+                    print('Model missing: ', vals)
+        with open(os.path.join(
                 self.clustering_dir,
-                'cluster.'+str(cluster)+'.sample_B.txt'), 'r'):
-            vals = mod.split()[0]
-            try:
-                rmfs.append(rmfs_dic[vals])
-            except:  # noqa: E722
-                print('Model missing: ', vals)
+                'cluster.'+str(cluster)+'.sample_B.txt'), 'r') as f:
+            for mod in f:
+                vals = mod.split()[0]
+                if vals in rmfs_dic:
+                    rmfs.append(rmfs_dic[vals])
+                else:
+                    print('Model missing: ', vals)
 
         return rmfs

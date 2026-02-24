@@ -5,6 +5,7 @@ import IMP.pmi.analysis
 import IMP.pmi.output
 import IMP.pmi.tools
 import IMP.atom
+import IMP.rmf
 import glob
 import math
 import numpy as np
@@ -12,9 +13,6 @@ import pandas as pd
 import itertools
 import os
 import multiprocessing as mp
-
-import IMP
-import IMP.rmf
 
 import matplotlib as mpl
 mpl.use('Agg')
