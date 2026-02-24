@@ -340,7 +340,10 @@ class AnalysisTrajectories(object):
         return score_fields, score_names
 
     def get_distance_fields(self, stat2_dict):
-        """Get inter-beads distances fields"""
+        """
+        Get inter-beads distances fields
+        """
+
         dist_dict = {}
 
         for handle in self.distance_handles:
@@ -390,40 +393,33 @@ class AnalysisTrajectories(object):
         return DB
 
     def get_keys(self, stat_file):
-        """Get all keys in stat file"""
-
+        """
+        Get all keys in stat file (reads only the first line to avoid loading
+        large files entirely into memory).
+        """
         with open(stat_file, "r") as of:
-            stat_file_lines = of.readlines()
-        for line in stat_file_lines:
-            try:
-                d = ast.literal_eval(line)
-            except (ValueError, SyntaxError) as e:
-                raise ValueError(
-                    f"Failed to parse stat file {stat_file}: {e}. "
-                    "File may be corrupted or in wrong format."
-                )
-            klist = list(d.keys())
-            # check if it is a stat2 file
-            if "STAT2HEADER" in klist:
-                import operator
+            first_line = of.readline()
+        if not first_line:
+            raise ValueError(f"Stat file {stat_file} is empty.")
+        try:
+            d = ast.literal_eval(first_line)
+        except (ValueError, SyntaxError) as e:
+            raise ValueError(
+                f"Failed to parse stat file {stat_file}: {e}. "
+                "File may be corrupted or in wrong format."
+            )
+        klist = list(d.keys())
+        # check if it is a stat2 file
+        if "STAT2HEADER" in klist:
+            import operator
 
-                for k in klist:
-                    if "STAT2HEADER" in str(k):
-                        del d[k]
-                stat2_dict = d
-                # get the list of keys sorted by value
-                kkeys = [
-                    k[0] for k in sorted(stat2_dict.items(), key=operator.itemgetter(1))
-                ]
-                klist = [
-                    k[1] for k in sorted(stat2_dict.items(), key=operator.itemgetter(1))
-                ]
-                invstat2_dict = {}
-                for k in kkeys:
-                    invstat2_dict.update({stat2_dict[k]: k})
-            else:
-                klist.sort()
-            break
+            for k in klist:
+                if "STAT2HEADER" in str(k):
+                    del d[k]
+            stat2_dict = d
+        else:
+            klist.sort()
+            stat2_dict = {k: k for k in klist}
 
         return stat2_dict
 
@@ -432,9 +428,9 @@ class AnalysisTrajectories(object):
 
         out_dirs_dict = {}
         for k in range(self.nproc - 1):
-            out_dirs_dict[k] = list(self.out_dirs[(k * ND) : (k * ND + ND)])
+            out_dirs_dict[k] = list(self.out_dirs[(k * ND):(k * ND + ND)])
         out_dirs_dict[self.nproc - 1] = list(
-            self.out_dirs[((self.nproc - 1) * ND) : (len(self.out_dirs))]
+            self.out_dirs[((self.nproc - 1) * ND):(len(self.out_dirs))]
         )
 
         processor = ParallelProcessor()
@@ -460,7 +456,7 @@ class AnalysisTrajectories(object):
     def read_stats_detailed(self, traj, stat_files):
         """
         Detailed reading of stats files that includes
-        the rmf in which the frame is.
+        a mapping between frame and rmf file.
         To be used when using rmf_slice
         """
 
@@ -480,30 +476,29 @@ class AnalysisTrajectories(object):
             info_names, info_fields = self.get_info_fields(stat2_dict)
 
             line_number = 0
+            # Stream file line-by-line to avoid loading entire file (e.g. 800MB) into memory
             with open(sf, "r") as of:
-                sf_lines = of.readlines()
+                for line in of:
+                    line_number += 1
+                    try:
+                        d = ast.literal_eval(line)
+                    except (ValueError, SyntaxError) as e:
+                        print(
+                            f"# Warning: skipped line number {line_number} "
+                            f"not a valid line: {e}"
+                        )
+                        break
 
-            for line in sf_lines:
-                line_number += 1
-                try:
-                    d = ast.literal_eval(line)
-                except (ValueError, SyntaxError) as e:
-                    print(
-                        f"# Warning: skipped line number {line_number} "
-                        f"not a valid line: {e}"
-                    )
-                    break
-
-                if line_number > 1:
-                    frmf = [d[field] for field in query_rmf_file][0]
-                    s0 = [float(d[field]) for field in score_fields] + [traj, frmf]
-                    S_scores.append(s0)
-                    if len(dist_fields) > 0:
-                        d0 = [s0[0]] + [float(d[field]) for field in dist_fields]
-                        S_dist.append(d0)
-                    if len(info_fields) > 0:
-                        p0 = [s0[0]] + [float(d[field]) for field in info_fields]
-                        P_info.append(p0)
+                    if line_number > 1:
+                        frmf = [d[field] for field in query_rmf_file][0]
+                        s0 = [float(d[field]) for field in score_fields] + [traj, frmf]
+                        S_scores.append(s0)
+                        if len(dist_fields) > 0:
+                            d0 = [s0[0]] + [float(d[field]) for field in dist_fields]
+                            S_dist.append(d0)
+                        if len(info_fields) > 0:
+                            p0 = [s0[0]] + [float(d[field]) for field in info_fields]
+                            P_info.append(p0)
 
         # Sort based on frame
         S_scores.sort(key=lambda x: float(x[0]))
@@ -592,6 +587,10 @@ class AnalysisTrajectories(object):
         return DF_s
 
     def read_traj_info(self, out_dirs_sel):
+        """
+        Read stats files for a given trajectory
+        """
+
         # Dictionary to put the scores of all the trajectories
         # files_dic: keys: frames, values: rmf3 file
 
@@ -760,9 +759,9 @@ class AnalysisTrajectories(object):
             # Collect distances and nuisances information
 
             self.S_all[out] = S_tot_scores[ts_max:]
-            try:
+            if S_info is not None:
                 self.S_info_all[out] = S_info[ts_max:]
-            except:  # noqa: E722
+            else:
                 print("No S_info")
             if self.XLs_restraint:
                 self.S_dist_all[out] = S_dist[ts_max:]
@@ -771,7 +770,7 @@ class AnalysisTrajectories(object):
 
     def get_field_id(self, dict, val):
         """
-        For single field, get number of fields in stat file
+        For single field, get dictionary key in stat file
         """
         return [k for k in dict.keys() if dict[k] == val]
 
@@ -800,7 +799,7 @@ class AnalysisTrajectories(object):
 
         for i, c in enumerate(selected_scores.columns.values[1:]):
             axes[i + n_res].hist(
-                selected_scores[c].loc[ts_eq[i] :: 10],
+                selected_scores[c].loc[ts_eq[i]::10],
                 n_bins,
                 histtype="step",
                 fill=False,
@@ -881,17 +880,21 @@ class AnalysisTrajectories(object):
         self, selected_scores, min_cluster_size=150, min_samples=5, skip=1
     ):
         """
-        DO HDBSCAN clustering for selected restraint and/or nuisance parameters
+        DO HDBSCAN clustering for selected restraint and/or nuisance parameters.
+        Builds only skipped-row DataFrames to reduce memory for large systems.
         """
-
-        print(np.sort(list(self.S_all.keys())))
-        all_dfs = [self.S_all[dd] for dd in np.sort(list(self.S_all.keys()))]
-        S_comb = pd.concat(all_dfs)
+        sorted_keys = np.sort(list(self.S_all.keys()))
+        # Build only the skipped subset per trajectory to avoid a full-size concat
+        parts_sel = [
+            self.S_all[dd][selected_scores].iloc[::skip] for dd in sorted_keys
+        ]
+        parts_all = [self.S_all[dd].iloc[::skip] for dd in sorted_keys]
+        S_comb_sel = pd.concat(parts_sel)
+        S_comb_all = pd.concat(parts_all)
+        del parts_sel, parts_all
 
         # Print all available fields before checking if field exists.
-        print("All available fields: ", S_comb.columns.values)
-        S_comb_sel = S_comb[selected_scores].iloc[::skip]
-        S_comb_all = S_comb.iloc[::skip]
+        print("All available fields: ", S_comb_all.columns.values)
         print("Fields selected for HDBSCAN clustering: ", S_comb_sel.columns.values)
 
         hdbsc = hdbscan.HDBSCAN(
@@ -944,7 +947,7 @@ class AnalysisTrajectories(object):
     def write_summary_hdbscan_clustering(self, S_comb_all):
         """
         Write clustering summary information
-        (i.e. cluster number, average scores, number of models)
+        (e.g. cluster number, average scores, number of models)
         """
 
         aggregation = {
@@ -1081,11 +1084,11 @@ class AnalysisTrajectories(object):
         """
 
         # Remove files from previous runs
-        try:
-            os.remove(os.path.join(self.analysis_dir, "selected_models_A_cluster*"))
-            os.remove(os.path.join(self.analysis_dir, "selected_models_B_cluster*"))
-        except:  # noqa: E722
-            pass
+        pattern_a = os.path.join(self.analysis_dir, "selected_models_A_cluster*")
+        pattern_b = os.path.join(self.analysis_dir, "selected_models_B_cluster*")
+        for file_path in glob.glob(pattern_a) + glob.glob(pattern_b):
+            if os.path.exists(file_path):
+                os.remove(file_path)
 
         print("Selecting and writing models to extract ...")
         clusters = list(set(S_comb["cluster"]))
@@ -1703,22 +1706,22 @@ class AnalysisTrajectories(object):
         self, Multiple_XLs_restraints=False, ambiguous_XLs_restraint=False
     ):
         # Remove files from previous runs
-        try:
-            os.remove(os.path.join(self.analysis_dir, "plot_XLs_distances_*"))
-            os.remove(os.path.join(self.analysis_dir, "XLs_satisfaction_cluster_*"))
-            os.remove(os.path.join(self.analysis_dir, "XLs_distances_cluster_*"))
-        except:  # noqa: E722
-            pass
+        patterns = [
+            os.path.join(self.analysis_dir, "plot_XLs_distances_*"),
+            os.path.join(self.analysis_dir, "XLs_satisfaction_cluster_*"),
+            os.path.join(self.analysis_dir, "XLs_distances_cluster_*"),
+        ]
+        for pattern in patterns:
+            for file_path in glob.glob(pattern):
+                if os.path.exists(file_path):
+                    os.remove(file_path)
 
-        # If re-renning analysis
+        # If re-running analysis
         if self.Multiple_XLs_restraints:
             pass
         else:
             self.Multiple_XLs_restraints = Multiple_XLs_restraints
-        try:
-            if self.ambiguous_XLs_restraint:
-                pass
-        except:  # noqa: E722
+        if not hasattr(self, 'ambiguous_XLs_restraint'):
             self.ambiguous_XLs_restraint = ambiguous_XLs_restraint
 
         unique_clusters = np.sort(list(set(self.S_comb_dist_clustering["cluster"])))
@@ -1961,21 +1964,21 @@ class AnalysisTrajectories(object):
         for i in range(n_plots):
             if i == n_plots - 1:
                 _ = ax[i].boxplot(
-                    S_sorted[:, (i * n_frac) : -1], patch_artist=True, showfliers=False
+                    S_sorted[:, (i * n_frac):-1], patch_artist=True, showfliers=False
                 )
                 ax[i].set_xticklabels(
-                    labels_ordered[(i * n_frac) : -1], rotation="vertical", fontsize=10
+                    labels_ordered[(i * n_frac):-1], rotation="vertical", fontsize=10
                 )
                 max_y = np.max(S_sorted[:, -1]) + 25
                 ax[i].set_ylim([0, (max_y - (max_y % 25))])
             else:
                 _ = ax[i].boxplot(
-                    S_sorted[:, (i * n_frac) : ((i + 1) * n_frac)],
+                    S_sorted[:, (i * n_frac):((i + 1) * n_frac)],
                     patch_artist=True,
                     showfliers=False,
                 )
                 ax[i].set_xticklabels(
-                    labels_ordered[(i * n_frac) : ((i + 1) * n_frac)],
+                    labels_ordered[(i * n_frac):((i + 1) * n_frac)],
                     rotation="vertical",
                     fontsize=10,
                 )
@@ -2110,7 +2113,7 @@ class AnalysisTrajectories(object):
     def substrings(self, s):
         for i in range(len(s)):
             for j in range(i, len(s)):
-                yield s[i : j + 1]
+                yield s[i:j + 1]
 
     def get_str_match(self, strs):
         if len(strs) > 1:
